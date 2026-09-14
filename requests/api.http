@@ -1,0 +1,146 @@
+@baseUrl = http://localhost:3000
+
+GET {{baseUrl}}/health
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+
+{
+  "originalUrl": "https://google.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: demo-key-001
+
+{
+  "originalUrl": "https://github.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: demo-key-001
+
+{
+  "originalUrl": "https://github.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: demo-key-001
+
+{
+  "originalUrl": "https://example.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+
+{}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+
+{
+  "originalUrl": "not-a-url"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+
+{
+  "originalUrl": "ftp://example.com/file.txt"
+}
+
+
+GET {{baseUrl}}/links/1
+
+
+GET {{baseUrl}}/links/999999
+
+
+GET {{baseUrl}}/links/abc
+
+
+GET {{baseUrl}}/links
+
+
+GET {{baseUrl}}/links/r/905e63a9
+
+
+GET {{baseUrl}}/links/r/not-found
+
+
+PUT {{baseUrl}}/links/1
+Content-Type: application/json
+
+{
+  "originalUrl": "https://github.com"
+}
+
+
+PUT {{baseUrl}}/links/1
+Content-Type: application/json
+
+{
+  "originalUrl": "invalid-url"
+}
+
+
+PUT {{baseUrl}}/links/999999
+Content-Type: application/json
+
+{
+  "originalUrl": "https://example.com"
+}
+
+
+PUT {{baseUrl}}/links/abc
+Content-Type: application/json
+
+{
+  "originalUrl": "https://example.com"
+}
+
+
+DELETE {{baseUrl}}/links/1
+
+
+DELETE {{baseUrl}}/links/999999
+
+
+DELETE {{baseUrl}}/links/abc
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: verification-001
+
+{
+  "originalUrl": "https://example.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: verification-001
+
+{
+  "originalUrl": "https://example.com"
+}
+
+
+POST {{baseUrl}}/links
+Content-Type: application/json
+Idempotency-Key: verification-001
+
+{
+  "originalUrl": "https://openai.com"
+}
