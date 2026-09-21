@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { registerClick } from "../grpc/analytics.client";
 import {
   findLinkByShortCode,
   createLink,
@@ -66,7 +67,25 @@ export async function createShortLink(
 }
 
 export async function getLinkByShortCode(shortCode: string) {
-  return findLinkByShortCode(shortCode);
+  const link = await findLinkByShortCode(shortCode);
+
+  if (!link) {
+    return undefined;
+  }
+
+  try {
+    await registerClick(shortCode);
+  } catch (error) {
+    console.error("Analytics Service unavailable:", error);
+
+    const serviceError = new Error("Analytics Service is unavailable");
+
+    (serviceError as Error & { statusCode?: number }).statusCode = 503;
+
+    throw serviceError;
+  }
+
+  return link;
 }
 
 export async function getLinkById(id: number) {

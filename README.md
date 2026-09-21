@@ -1,10 +1,21 @@
 # Shear.ly
 
-Shear.ly — REST API для скорочення URL з підрахунком переходів.
+Shear.ly — REST API для скорочення URL з підрахунком переходів та окремим сервісом аналітики.
 
-Проєкт реалізований у рамках лабораторної роботи з дисципліни **«Архітектура розподілених систем»**.
+Проєкт реалізований у рамках лабораторних робіт з дисципліни **«Архітектура розподілених систем»**.
+
+У лабораторній роботі №2 монолітний REST-сервіс було декомпозовано на два сервіси:
+
+- **Link Service** — робота з короткими посиланнями;
+- **Analytics Service** — збір та отримання статистики переходів.
+
+Для синхронної взаємодії між сервісами використовується **gRPC**.
+
+---
 
 ## Функціональність
+
+### Link Service
 
 API підтримує:
 
@@ -12,13 +23,25 @@ API підтримує:
 - отримання посилання за ID;
 - отримання списку всіх посилань;
 - перенаправлення за коротким кодом;
-- підрахунок кількості переходів;
 - оновлення посилання;
 - видалення посилання;
 - перевірку стану API та бази даних;
 - валідацію URL;
 - єдиний формат помилок;
-- підтримку `Idempotency-Key` для безпечного повторення запитів.
+- підтримку `Idempotency-Key`;
+- взаємодію з Analytics Service через gRPC;
+- обробку недоступності Analytics Service з поверненням `503 Service Unavailable`.
+
+### Analytics Service
+
+Analytics Service відповідає за:
+
+- реєстрацію переходів за коротким кодом;
+- отримання статистики окремого посилання;
+- отримання загальної кількості переходів;
+- зберігання аналітичних даних у власній таблиці `analytics_clicks`.
+
+---
 
 ## Технології
 
@@ -29,12 +52,60 @@ API підтримує:
 - **Docker / Docker Compose**
 - **node-postgres (`pg`)**
 - **dotenv**
+- **gRPC**
+- **@grpc/grpc-js**
+- **@grpc/proto-loader**
+- **ts-proto**
+
+---
+
+## Архітектура
+
+Після декомпозиції система складається з двох сервісів:
+
+```text
+                         Client
+                           |
+                           | HTTP REST
+                           v
+                +----------------------+
+                |     Link Service     |
+                |        :3000         |
+                +----------------------+
+                    |             |
+                    |             | gRPC
+                    |             v
+                    |    +----------------------+
+                    |    |  Analytics Service  |
+                    |    |       :50051         |
+                    |    +----------------------+
+                    |             |
+                    v             v
+              PostgreSQL      PostgreSQL
+                links       analytics_clicks
+             idem_keys
+```
+
+### Власність даних
+
+**Link Service** володіє:
+
+- `links`;
+- `idem_keys`.
+
+**Analytics Service** володіє:
+
+- `analytics_clicks`.
+
+Analytics Service не виконує SQL-запити до таблиць Link Service.
+
+---
 
 ## Структура проєкту
 
 ```text
 shear.ly/
-│
+
 ├── .env
 ├── .env.example
 ├── .gitignore
@@ -51,37 +122,67 @@ shear.ly/
 ├── requests/
 │   └── api.http
 │
-└── src/
-    ├── app.ts
-    ├── server.ts
+├── src/
+│   ├── app.ts
+│   ├── server.ts
+│   │
+│   ├── config/
+│   │   └── env.ts
+│   │
+│   ├── controllers/
+│   │   └── link.controller.ts
+│   │
+│   ├── db/
+│   │   └── database.ts
+│   │
+│   ├── generated/
+│   │   └── analytics.ts
+│   │
+│   ├── grpc/
+│   │   └── analytics.client.ts
+│   │
+│   ├── middleware/
+│   │   └── error.middleware.ts
+│   │
+│   ├── proto/
+│   │   └── analytics.proto
+│   │
+│   ├── repositories/
+│   │   ├── link.repository.ts
+│   │   └── idempotency.repository.ts
+│   │
+│   ├── routes/
+│   │   └── link.routes.ts
+│   │
+│   ├── services/
+│   │   └── link.service.ts
+│   │
+│   └── types/
+│       └── link.types.ts
+│
+└── analytics-service/
     │
-    ├── config/
-    │   └── env.ts
+    ├── .env
+    ├── package.json
     │
-    ├── controllers/
-    │   └── link.controller.ts
+    ├── migrations/
+    │   └── 001_create_analytics.sql
     │
-    ├── db/
-    │   └── database.ts
+    ├── proto/
+    │   └── analytics.proto
     │
-    ├── middleware/
-    │   └── error.middleware.ts
-    │
-    ├── repositories/
-    │   ├── link.repository.ts
-    │   └── idempotency.repository.ts
-    │
-    ├── routes/
-    │   └── link.routes.ts
-    │
-    ├── services/
-    │   └── link.service.ts
-    │
-    └── types/
-        └── link.types.ts
+    └── src/
+        ├── server.ts
+        ├── analytics.repository.ts
+        ├── analytics.service.ts
+        │
+        └── generated/
+            └── analytics.ts
 ```
 
-## Вимоги
+---
+
+# Вимоги
 
 Для запуску проєкту необхідно мати:
 
@@ -107,9 +208,11 @@ npm --version
 docker --version
 ```
 
-## Налаштування змінних середовища
+---
 
-Конфігурація застосунку виконується через змінні середовища.
+# Налаштування змінних середовища
+
+## Link Service
 
 Створити файл `.env` у корені проєкту:
 
@@ -122,13 +225,34 @@ POSTGRES_PASSWORD=postgres
 PORT=3000
 ```
 
-Файл `.env` не повинен додаватися до Git.
+## Analytics Service
 
-Для прикладу конфігурації використовується `.env.example`.
+Створити файл:
 
-## Запуск PostgreSQL
+```text
+analytics-service/.env
+```
 
-Запустити PostgreSQL через Docker Compose:
+з таким вмістом:
+
+```env
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+POSTGRES_DB=shearly
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+GRPC_PORT=50051
+```
+
+Файли `.env` не повинні додаватися до Git.
+
+Для прикладу конфігурації використовуються `.env.example`.
+
+---
+
+# Запуск PostgreSQL
+
+PostgreSQL запускається через Docker Compose:
 
 ```bash
 docker compose up -d
@@ -152,11 +276,13 @@ PostgreSQL доступний на:
 127.0.0.1:5432
 ```
 
-## Міграції бази даних
+---
 
-Структура бази даних описана у директорії `migrations`.
+# Міграції бази даних
 
-### Таблиця links
+## Link Service
+
+### Таблиця `links`
 
 Файл:
 
@@ -164,18 +290,20 @@ PostgreSQL доступний на:
 migrations/001_create_links.sql
 ```
 
-Створює таблицю `links`:
+Створює таблицю:
 
 ```text
-id
-original_url
-short_code
-click_count
-created_at
-updated_at
+links
+
+├── id
+├── original_url
+├── short_code
+├── click_count
+├── created_at
+└── updated_at
 ```
 
-### Таблиця idem_keys
+### Таблиця `idem_keys`
 
 Файл:
 
@@ -183,92 +311,315 @@ updated_at
 migrations/002_create_idempotency_keys.sql
 ```
 
-Створює таблицю для збереження результатів ідемпотентних запитів:
+Створює таблицю:
 
 ```text
-id
-key
-request_hash
-response_status
-response_body
-created_at
+idem_keys
+
+├── id
+├── key
+├── request_hash
+├── response_status
+├── response_body
+└── created_at
 ```
 
-Міграції виконуються у PostgreSQL.
+## Analytics Service
 
-## Встановлення залежностей
+Міграція знаходиться у:
 
-Встановити залежності:
+```text
+analytics-service/migrations/001_create_analytics.sql
+```
+
+Створюється таблиця:
+
+```text
+analytics_clicks
+
+├── id
+├── short_code
+├── click_count
+└── created_at
+```
+
+Analytics Service використовує цю таблицю для зберігання статистики переходів.
+
+---
+
+# Встановлення залежностей
+
+Для Link Service:
 
 ```bash
 npm install
 ```
 
-## Запуск у режимі розробки
-
-Запустити API:
+Для Analytics Service:
 
 ```bash
-npm run dev
+cd analytics-service
+npm install
+cd ..
 ```
 
-Для Windows PowerShell, якщо `npm.ps1` заблокований політикою виконання, можна використати:
+---
+
+# Генерація gRPC-коду
+
+gRPC-контракт знаходиться у:
+
+```text
+analytics-service/proto/analytics.proto
+```
+
+Для Link Service копія контракту знаходиться у:
+
+```text
+src/proto/analytics.proto
+```
+
+Генерація коду Analytics Service:
+
+```powershell
+cd analytics-service
+
+npx.cmd protoc `
+  --plugin=protoc-gen-ts_proto=.\node_modules\.bin\protoc-gen-ts_proto.cmd `
+  --ts_proto_out=.\src\generated `
+  --ts_proto_opt=outputServices=grpc-js `
+  --proto_path=.\proto `
+  .\proto\analytics.proto
+```
+
+Генерація коду Link Service:
+
+```powershell
+npx.cmd protoc `
+  --plugin=protoc-gen-ts_proto=.\node_modules\.bin\protoc-gen-ts_proto.cmd `
+  --ts_proto_out=.\src\generated `
+  --ts_proto_opt=outputServices=grpc-js `
+  --proto_path=.\src\proto `
+  .\src\proto\analytics.proto
+```
+
+---
+
+# gRPC API
+
+Контракт визначений у:
+
+```text
+analytics.proto
+```
+
+Analytics Service надає три методи:
+
+```text
+RegisterClick
+GetLinkAnalytics
+GetTotalClicks
+```
+
+## RegisterClick
+
+Реєструє перехід за коротким кодом.
+
+```proto
+rpc RegisterClick(RegisterClickRequest)
+    returns (RegisterClickResponse);
+```
+
+Запит:
+
+```proto
+message RegisterClickRequest {
+    string short_code = 1;
+    string user_agent = 2;
+}
+```
+
+Поле `user_agent` було додано під час експерименту зі зміною схеми.
+
+## GetLinkAnalytics
+
+Повертає статистику окремого короткого посилання:
+
+```proto
+rpc GetLinkAnalytics(GetLinkAnalyticsRequest)
+    returns (GetLinkAnalyticsResponse);
+```
+
+## GetTotalClicks
+
+Повертає загальну кількість переходів:
+
+```proto
+rpc GetTotalClicks(GetTotalClicksRequest)
+    returns (GetTotalClicksResponse);
+```
+
+---
+
+# Запуск Analytics Service
+
+Перейти до каталогу:
+
+```powershell
+cd analytics-service
+```
+
+Запустити сервіс:
 
 ```powershell
 npm.cmd run dev
 ```
 
-Після запуску API доступний за адресою:
+Очікується повідомлення:
 
 ```text
-http://localhost:3000
+Analytics gRPC server is running on port 50051
 ```
 
-Очікуване повідомлення:
+Analytics Service працює на:
+
+```text
+localhost:50051
+```
+
+---
+
+# Запуск Link Service
+
+У новому терміналі з кореня проєкту:
+
+```powershell
+npm.cmd run dev
+```
+
+Очікується повідомлення:
 
 ```text
 Shear.ly server is running on port 3000
 ```
 
-## Production build
+Link Service доступний за адресою:
 
-Створити TypeScript build:
-
-```bash
-npm run build
+```text
+http://localhost:3000
 ```
 
-Після успішної компіляції запускається:
+---
 
-```bash
-npm start
+# Взаємодія сервісів
+
+Зовнішній REST API залишається без змін.
+
+Під час перенаправлення:
+
+```text
+GET /links/r/:shortCode
 ```
 
-## Перевірка стану API
+відбувається така послідовність:
+
+```text
+Client
+   |
+   | GET /links/r/905e63a9
+   v
+Link Service
+   |
+   | пошук посилання
+   v
+PostgreSQL
+   |
+   | link
+   v
+Link Service
+   |
+   | gRPC RegisterClick
+   v
+Analytics Service
+   |
+   | INSERT / UPDATE
+   v
+analytics_clicks
+```
+
+Після успішної реєстрації переходу Link Service виконує HTTP redirect на оригінальний URL.
+
+---
+
+# Перенаправлення та аналітика
+
+Endpoint:
 
 ```http
-GET /health
+GET /links/r/:shortCode
 ```
 
 Приклад:
 
 ```bash
-curl http://localhost:3000/health
+curl.exe -i http://localhost:3000/links/r/905e63a9
 ```
 
 Успішна відповідь:
 
+```text
+HTTP/1.1 302 Found
+Location: https://github.com
+```
+
+При кожному успішному перенаправленні Link Service викликає:
+
+```text
+Analytics Service → RegisterClick
+```
+
+Analytics Service збільшує `click_count` у власній таблиці:
+
+```text
+analytics_clicks
+```
+
+---
+
+# Timeout та обробка недоступності Analytics Service
+
+Для gRPC-запиту встановлено deadline:
+
+```text
+1 секунда
+```
+
+Якщо Analytics Service недоступний або не відповідає протягом встановленого часу, Link Service не очікує необмежено довго.
+
+У такому випадку клієнт отримує:
+
+```http
+503 Service Unavailable
+```
+
+Приклад:
+
 ```json
 {
-  "status": "ok"
+  "error": {
+    "code": "INTERNAL_SERVER_ERROR",
+    "message": "Analytics Service is unavailable"
+  }
 }
 ```
 
-Endpoint `/health` виконує перевірку підключення до PostgreSQL.
+Таким чином, відмова Analytics Service не призводить до зависання REST-запиту.
 
-## API
+---
 
-### Створення короткого посилання
+# API
+
+## Створення короткого посилання
 
 ```http
 POST /links
@@ -283,7 +634,7 @@ Body:
 }
 ```
 
-Успішна відповідь:
+Приклад відповіді:
 
 ```json
 {
@@ -303,7 +654,9 @@ http
 https
 ```
 
-### Отримання посилання за ID
+---
+
+## Отримання посилання за ID
 
 ```http
 GET /links/:id
@@ -315,13 +668,17 @@ GET /links/:id
 GET /links/1
 ```
 
-### Отримання всіх посилань
+---
+
+## Отримання всіх посилань
 
 ```http
 GET /links
 ```
 
-### Перенаправлення за коротким кодом
+---
+
+## Перенаправлення за коротким кодом
 
 ```http
 GET /links/r/:shortCode
@@ -335,15 +692,11 @@ GET /links/r/905e63a9
 
 У відповідь API виконує HTTP redirect на оригінальний URL.
 
-Кожне успішне перенаправлення збільшує:
+При цьому статистика переходу передається до Analytics Service через gRPC.
 
-```text
-click_count
-```
+---
 
-на одиницю.
-
-### Оновлення посилання
+## Оновлення посилання
 
 ```http
 PUT /links/:id
@@ -366,7 +719,9 @@ PUT /links/1
 
 Оновлюється `original_url`, при цьому короткий код залишається незмінним.
 
-### Видалення посилання
+---
+
+## Видалення посилання
 
 ```http
 DELETE /links/:id
@@ -378,15 +733,23 @@ DELETE /links/:id
 DELETE /links/1
 ```
 
-## Idempotency-Key
+---
 
-Для `POST /links` підтримується заголовок:
+# Idempotency-Key
+
+Для:
+
+```http
+POST /links
+```
+
+підтримується заголовок:
 
 ```http
 Idempotency-Key: unique-key
 ```
 
-Наприклад:
+Приклад:
 
 ```http
 POST /links
@@ -404,7 +767,7 @@ Body:
 
 Перший запит створює коротке посилання.
 
-Повторний запит з тим самим `Idempotency-Key` і тим самим body повертає вже збережений результат і **не створює нове посилання**.
+Повторний запит з тим самим `Idempotency-Key` і тим самим body повертає вже збережений результат та **не створює нове посилання**.
 
 Якщо той самий ключ використати з іншим body, API повертає:
 
@@ -412,7 +775,7 @@ Body:
 409 Conflict
 ```
 
-Приклад відповіді:
+Приклад:
 
 ```json
 {
@@ -423,23 +786,9 @@ Body:
 }
 ```
 
-Для перевірки idempotency можна виконати:
+---
 
-```text
-POST + key + google.com
-POST + same key + google.com
-POST + same key + github.com
-```
-
-Очікуваний результат:
-
-```text
-1-й запит → 201 Created
-2-й запит → той самий результат
-3-й запит → 409 Conflict
-```
-
-## Обробка помилок
+# Обробка помилок
 
 API використовує єдиний формат помилок:
 
@@ -452,11 +801,7 @@ API використовує єдиний формат помилок:
 }
 ```
 
-### 400 Bad Request
-
-Використовується для помилкових даних запиту.
-
-Приклад:
+## 400 Bad Request
 
 ```json
 {
@@ -467,9 +812,7 @@ API використовує єдиний формат помилок:
 }
 ```
 
-### 404 Not Found
-
-Використовується, якщо посилання не знайдено.
+## 404 Not Found
 
 ```json
 {
@@ -480,9 +823,7 @@ API використовує єдиний формат помилок:
 }
 ```
 
-### 409 Conflict
-
-Використовується при конфлікті `Idempotency-Key`.
+## 409 Conflict
 
 ```json
 {
@@ -493,9 +834,22 @@ API використовує єдиний формат помилок:
 }
 ```
 
-### 500 Internal Server Error
+## 503 Service Unavailable
 
-Використовується для непередбачених помилок сервера.
+Повертається, якщо Analytics Service недоступний:
+
+```json
+{
+  "error": {
+    "code": "INTERNAL_SERVER_ERROR",
+    "message": "Analytics Service is unavailable"
+  }
+}
+```
+
+## 500 Internal Server Error
+
+Використовується для непередбачених помилок сервера:
 
 ```json
 {
@@ -506,7 +860,33 @@ API використовує єдиний формат помилок:
 }
 ```
 
-## HTTP-запити для тестування
+---
+
+# Перевірка стану API
+
+```http
+GET /health
+```
+
+Приклад:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Успішна відповідь:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+Endpoint `/health` перевіряє підключення Link Service до PostgreSQL.
+
+---
+
+# HTTP-запити для тестування
 
 Готова колекція HTTP-запитів знаходиться у:
 
@@ -523,42 +903,16 @@ requests/api.http
 - redirect;
 - update;
 - delete;
-- валідації;
+- валідації URL;
 - `404`;
 - `409`;
 - `Idempotency-Key`.
 
-Запити можна виконувати через REST Client у VS Code або будь-який інший HTTP-клієнт.
+Запити можна виконувати через REST Client у VS Code або інший HTTP-клієнт.
 
-## Приклад тестування через PowerShell
+---
 
-Перевірка `/health`:
-
-```powershell
-Invoke-RestMethod http://localhost:3000/health
-```
-
-Створення link:
-
-```powershell
-$body = @{
-    originalUrl = "https://google.com"
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-    -Uri "http://localhost:3000/links" `
-    -Method Post `
-    -ContentType "application/json" `
-    -Body $body
-```
-
-Отримання всіх links:
-
-```powershell
-Invoke-RestMethod http://localhost:3000/links
-```
-
-## Перевірка PostgreSQL
+# Перевірка PostgreSQL
 
 Підключитися до PostgreSQL у Docker:
 
@@ -582,13 +936,174 @@ FROM idem_keys
 ORDER BY id;
 ```
 
+Переглянути аналітику:
+
+```sql
+SELECT id, short_code, click_count, created_at
+FROM analytics_clicks
+ORDER BY id;
+```
+
 Вийти з PostgreSQL:
 
 ```sql
 \q
 ```
 
-## Зупинка PostgreSQL
+---
+
+# Приклад перевірки Analytics Service
+
+Після виконання:
+
+```bash
+curl.exe -i http://localhost:3000/links/r/905e63a9
+```
+
+можна перевірити таблицю:
+
+```sql
+SELECT *
+FROM analytics_clicks;
+```
+
+Приклад:
+
+```text
+ id | short_code | click_count
+----+------------+------------
+  1 | 905e63a9   | 2
+```
+
+Це означає, що для короткого коду `905e63a9` було зареєстровано два переходи.
+
+---
+
+# Schema Evolution
+
+У рамках лабораторної роботи було виконано експеримент зі зміною gRPC-контракту.
+
+Початкова структура:
+
+```proto
+message RegisterClickRequest {
+  string short_code = 1;
+}
+```
+
+Після зміни до контракту було додано нове поле:
+
+```proto
+message RegisterClickRequest {
+  string short_code = 1;
+  string user_agent = 2;
+}
+```
+
+Було виконано такі дії:
+
+1. поле `user_agent` додано до `analytics.proto`;
+2. повторно згенеровано код тільки для Analytics Service;
+3. Analytics Service перезапущено;
+4. Link Service залишився зі старою версією згенерованого клієнта;
+5. виконано запит через старий Link Service;
+6. запит успішно оброблено новим Analytics Service.
+
+Старий клієнт продовжив працювати, оскільки він передає поле:
+
+```text
+short_code = 1
+```
+
+а нове поле:
+
+```text
+user_agent = 2
+```
+
+не є обов'язковим для старого клієнта.
+
+Номер існуючого поля `1` не змінювався та не використовувався повторно.
+
+Це демонструє сумісність старого клієнта з оновленою версією gRPC-сервера.
+
+---
+
+# Зміни в лабораторній роботі №2
+
+Порівняно з лабораторною роботою №1 у проєкті Shear.ly було виконано такі зміни:
+
+- створено окремий **Analytics Service** для збору статистики переходів;
+- додано окрему таблицю `analytics_clicks` для зберігання аналітичних даних;
+- створено gRPC-контракт `analytics.proto`;
+- реалізовано три gRPC-методи: `RegisterClick`, `GetLinkAnalytics`, `GetTotalClicks`;
+- додано gRPC-клієнт у **Link Service**;
+- логіку збільшення кількості переходів перенесено до Analytics Service;
+- реалізовано взаємодію між сервісами через gRPC;
+- зовнішній REST API Link Service залишено без змін;
+- додано deadline **1 секунда** для gRPC-запиту;
+- реалізовано повернення HTTP `503 Service Unavailable`, якщо Analytics Service недоступний;
+- реалізовано розділення володіння даними між сервісами;
+- виконано перевірку роботи системи при зупиненому Analytics Service;
+- проведено експеримент **schema evolution** шляхом додавання поля `user_agent = 2`;
+- перевірено, що старий Link Service продовжує працювати з оновленим Analytics Service без повторної генерації клієнта.
+
+---
+
+# Архітектурні принципи
+
+Проєкт використовує розділення відповідальностей.
+
+## Link Service
+
+Відповідає за:
+
+- REST API;
+- короткі посилання;
+- `links`;
+- `idem_keys`;
+- idempotency;
+- redirect.
+
+## Analytics Service
+
+Відповідає за:
+
+- статистику переходів;
+- `analytics_clicks`;
+- gRPC API аналітики.
+
+## Взаємодія
+
+Сервіси взаємодіють тільки через визначений gRPC-контракт.
+
+```text
+Link Service
+     |
+     | gRPC
+     v
+Analytics Service
+```
+
+Analytics Service не має прямого доступу до таблиць Link Service.
+
+---
+
+# Зупинка сервісів
+
+Зупинити Link Service можна через:
+
+```text
+Ctrl + C
+```
+
+Зупинити Analytics Service:
+
+```text
+Ctrl + C
+```
+
+Зупинити PostgreSQL:
 
 ```bash
 docker compose down
@@ -600,111 +1115,74 @@ docker compose down
 docker compose down -v
 ```
 
-## Архітектура
+---
 
-Проєкт використовує розділення відповідальностей:
-
-```text
-HTTP Request
-     │
-     ▼
-Routes
-     │
-     ▼
-Controllers
-     │
-     ▼
-Services
-     │
-     ▼
-Repositories
-     │
-     ▼
-PostgreSQL
-```
-
-### Routes
-
-Визначають HTTP endpoints.
-
-### Controllers
-
-Обробляють HTTP request/response та базову валідацію.
-
-### Services
-
-Містять бізнес-логіку:
-
-- генерація короткого коду;
-- створення посилання;
-- idempotency;
-- перевірка конфліктів.
-
-### Repositories
-
-Виконують SQL-запити до PostgreSQL.
-
-### Middleware
-
-Містить централізовану обробку помилок.
-
-## Основна модель даних
-
-### links
-
-```text
-links
-├── id
-├── original_url
-├── short_code
-├── click_count
-├── created_at
-└── updated_at
-```
-
-`short_code` є унікальним.
-
-`click_count` починається з `0` і збільшується при перенаправленні.
-
-### idem_keys
-
-```text
-idem_keys
-├── id
-├── key
-├── request_hash
-├── response_status
-├── response_body
-└── created_at
-```
-
-Таблиця використовується для забезпечення ідемпотентності створення коротких посилань.
-
-## Git
-
-Файли конфігурації з секретними значеннями, зокрема `.env`, не повинні додаватися до репозиторію.
-
-Для нового середовища необхідно створити власний `.env` на основі `.env.example`.
-
-## Локальний запуск
+# Локальний запуск
 
 Повний порядок запуску:
 
+### 1. Клонувати репозиторій
+
 ```bash
 git clone <repository-url>
-cd shear.ly
-npm install
-docker compose up -d
-npm run dev
 ```
 
-API після запуску доступний за адресою:
+### 2. Перейти до проєкту
+
+```bash
+cd shear.ly
+```
+
+### 3. Встановити залежності Link Service
+
+```bash
+npm install
+```
+
+### 4. Встановити залежності Analytics Service
+
+```bash
+cd analytics-service
+npm install
+cd ..
+```
+
+### 5. Запустити PostgreSQL
+
+```bash
+docker compose up -d
+```
+
+### 6. Запустити Analytics Service
+
+В окремому терміналі:
+
+```powershell
+cd analytics-service
+npm.cmd run dev
+```
+
+Очікується:
 
 ```text
-http://localhost:3000
+Analytics gRPC server is running on port 50051
 ```
 
-Перевірка:
+### 7. Запустити Link Service
+
+У ще одному терміналі:
+
+```powershell
+npm.cmd run dev
+```
+
+Очікується:
+
+```text
+Shear.ly server is running on port 3000
+```
+
+### 8. Перевірити API
 
 ```text
 GET http://localhost:3000/health
@@ -717,3 +1195,36 @@ GET http://localhost:3000/health
   "status": "ok"
 }
 ```
+
+---
+
+# Production build
+
+Для Link Service:
+
+```bash
+npm run build
+```
+
+Після успішної компіляції:
+
+```bash
+npm start
+```
+
+Analytics Service наразі запускається у режимі розробки:
+
+```powershell
+cd analytics-service
+npm.cmd run dev
+```
+
+---
+
+# Результат лабораторної роботи
+
+У результаті виконання лабораторної роботи №2 монолітний REST-сервіс Shear.ly було декомпозовано на два незалежні сервіси — Link Service та Analytics Service.
+
+Link Service продовжує надавати REST API для роботи з короткими посиланнями, а Analytics Service відповідає за статистику переходів. Синхронна взаємодія між сервісами реалізована за допомогою gRPC. Для gRPC-викликів встановлено deadline, а при недоступності Analytics Service REST API повертає `503 Service Unavailable`.
+
+Кожен сервіс володіє власними даними, а взаємодія між ними виконується через визначений контракт `analytics.proto`. Також було проведено експеримент зі зміною gRPC-схеми та перевірено сумісність старого клієнта з оновленим сервером.

@@ -17,12 +17,9 @@ export async function createLink(data: CreateLinkData) {
 export async function findLinkByShortCode(shortCode: string) {
   const result = await pool.query(
     `
-        UPDATE links
-        SET
-            click_count = click_count + 1,
-            updated_at = NOW()
+        SELECT *
+        FROM links
         WHERE short_code = $1
-        RETURNING *;
         `,
     [shortCode],
   );

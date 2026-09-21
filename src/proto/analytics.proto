@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package analytics;
+
+service AnalyticsService {
+  rpc RegisterClick(RegisterClickRequest) returns (RegisterClickResponse);
+
+  rpc GetLinkAnalytics(GetLinkAnalyticsRequest) returns (GetLinkAnalyticsResponse);
+
+  rpc GetTotalClicks(GetTotalClicksRequest) returns (GetTotalClicksResponse);
+}
+
+message RegisterClickRequest {
+  string short_code = 1;
+}
+
+message RegisterClickResponse {
+  bool success = 1;
+}
+
+message GetLinkAnalyticsRequest {
+  string short_code = 1;
+}
+
+message GetLinkAnalyticsResponse {
+  string short_code = 1;
+  int32 click_count = 2;
+}
+
+message GetTotalClicksRequest {}
+
+message GetTotalClicksResponse {
+  int32 total_clicks = 1;
+}
