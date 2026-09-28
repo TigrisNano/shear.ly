@@ -19,5 +19,13 @@ export const env = {
     password: getEnv("POSTGRES_PASSWORD"),
   },
 
+  postgresReplica: {
+    host: getEnv("POSTGRES_REPLICA_HOST"),
+    port: Number(getEnv("POSTGRES_REPLICA_PORT")),
+    database: getEnv("POSTGRES_DB"),
+    user: getEnv("POSTGRES_USER"),
+    password: getEnv("POSTGRES_PASSWORD"),
+  },
+
   port: Number(getEnv("PORT")),
 };

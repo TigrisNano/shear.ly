@@ -1,4 +1,4 @@
-import { pool } from "../db/database";
+import { pool, replicaPool } from "../db/database";
 import { CreateLinkData } from "../types/link.types";
 
 export async function createLink(data: CreateLinkData) {
@@ -15,7 +15,7 @@ export async function createLink(data: CreateLinkData) {
 }
 
 export async function findLinkByShortCode(shortCode: string) {
-  const result = await pool.query(
+  const result = await replicaPool.query(
     `
         SELECT *
         FROM links
@@ -28,7 +28,7 @@ export async function findLinkByShortCode(shortCode: string) {
 }
 
 export async function findLinkById(id: number) {
-  const result = await pool.query(
+  const result = await replicaPool.query(
     `
         SELECT *
         FROM links
@@ -41,7 +41,7 @@ export async function findLinkById(id: number) {
 }
 
 export async function findAllLinks() {
-  const result = await pool.query(
+  const result = await replicaPool.query(
     `
         SELECT *
         FROM links
