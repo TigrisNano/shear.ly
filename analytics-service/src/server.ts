@@ -78,8 +78,6 @@ const analyticsServer: AnalyticsServiceServer = {
 
 const server = new Server();
 
-console.log("Registered gRPC methods:", Object.keys(AnalyticsServiceService));
-
 server.addService(AnalyticsServiceService, analyticsServer);
 
 const port = Number(process.env.GRPC_PORT || 50051);
@@ -92,7 +90,5 @@ server.bindAsync(
       console.error("Failed to start gRPC server:", error);
       process.exit(1);
     }
-
-    console.log(`Analytics gRPC server is running on port ${boundPort}`);
   },
 );

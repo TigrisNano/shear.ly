@@ -1,0 +1,6 @@
+projectKey=Shear.ly
+serverUrl=http://localhost:9000
+serverVersion=26.9.0.129388
+dashboardUrl=http://localhost:9000/dashboard?id=Shear.ly
+ceTaskId=94b183f7-9ffa-46c5-8673-4b2becc727e0
+ceTaskUrl=http://localhost:9000/api/ce/task?id=94b183f7-9ffa-46c5-8673-4b2becc727e0

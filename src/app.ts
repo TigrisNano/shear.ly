@@ -4,10 +4,11 @@ import { pool } from "./db/database";
 import linkRoutes from "./routes/link.routes";
 
 const app = express();
+app.disable("x-powered-by");
 
 app.use(express.json());
 
-app.get("/health", async (_req, res) => {
+app.get("/health", async (_req, res, next) => {
   try {
     await pool.query("SELECT 1;");
 
@@ -15,9 +16,7 @@ app.get("/health", async (_req, res) => {
       status: "ok",
     });
   } catch (error) {
-    res.status(500).json({
-      status: "error",
-    });
+    next(error);
   }
 });
 
