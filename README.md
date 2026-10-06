@@ -1,21 +1,21 @@
 # Shear.ly
 
-Shear.ly — REST API для скорочення URL з підрахунком переходів та окремим сервісом аналітики.
+Shear.ly – REST API для скорочення URL з підрахунком переходів та окремим сервісом аналітики.
 
-Проєкт реалізований у рамках лабораторних робіт з дисципліни **«Архітектура розподілених систем»**.
+Проєкт реалізований у рамках дисципліни **«Архітектура розподілених систем»**.
 
-У лабораторній роботі №2 монолітний REST-сервіс було декомпозовано на два сервіси:
+Система складається з двох сервісів:
 
-- **Link Service** — робота з короткими посиланнями;
-- **Analytics Service** — збір та отримання статистики переходів.
+- **Link Service** – робота з короткими посиланнями та REST API;
+- **Analytics Service** – збір та отримання статистики переходів.
 
-Для синхронної взаємодії між сервісами використовується **gRPC**.
+Для синхронного отримання аналітики використовується **gRPC**, а для асинхронної реєстрації переходів – **RabbitMQ**.
 
 ---
 
-## Функціональність
+# Функціональність
 
-### Link Service
+## Link Service
 
 API підтримує:
 
@@ -29,21 +29,22 @@ API підтримує:
 - валідацію URL;
 - єдиний формат помилок;
 - підтримку `Idempotency-Key`;
-- взаємодію з Analytics Service через gRPC;
-- обробку недоступності Analytics Service з поверненням `503 Service Unavailable`.
+- публікацію подій `ClickRegistered` у RabbitMQ.
 
-### Analytics Service
+## Analytics Service
 
 Analytics Service відповідає за:
 
-- реєстрацію переходів за коротким кодом;
+- обробку подій `ClickRegistered`;
 - отримання статистики окремого посилання;
 - отримання загальної кількості переходів;
-- зберігання аналітичних даних у власній таблиці `analytics_clicks`.
+- зберігання аналітичних даних у таблиці `analytics_clicks`;
+- ідемпотентну обробку повідомлень;
+- підтвердження повідомлень RabbitMQ тільки після успішної обробки.
 
 ---
 
-## Технології
+# Технології
 
 - **Node.js**
 - **TypeScript**
@@ -52,6 +53,8 @@ Analytics Service відповідає за:
 - **Docker / Docker Compose**
 - **node-postgres (`pg`)**
 - **dotenv**
+- **RabbitMQ**
+- **amqplib**
 - **gRPC**
 - **@grpc/grpc-js**
 - **@grpc/proto-loader**
@@ -59,34 +62,57 @@ Analytics Service відповідає за:
 
 ---
 
-## Архітектура
+# Архітектура
 
-Після декомпозиції система складається з двох сервісів:
+Система використовує синхронну взаємодію для отримання аналітичних даних та асинхронну взаємодію для реєстрації переходів.
 
 ```text
                          Client
                            |
                            | HTTP REST
                            v
-                +----------------------+
-                |     Link Service     |
-                |        :3000         |
-                +----------------------+
-                    |             |
-                    |             | gRPC
-                    |             v
-                    |    +----------------------+
-                    |    |  Analytics Service  |
-                    |    |       :50051         |
-                    |    +----------------------+
-                    |             |
-                    v             v
-              PostgreSQL      PostgreSQL
-                links       analytics_clicks
-             idem_keys
+                 +----------------------+
+                 |     Link Service     |
+                 |        :3000         |
+                 +----------------------+
+                    |              |
+                    |              | ClickRegistered
+                    |              v
+                    |       +-------------+
+                    |       |  RabbitMQ   |
+                    |       +-------------+
+                    |              |
+                    |              | analytics.clicks
+                    |              v
+                    |       +----------------------+
+                    |       |  Analytics Service   |
+                    |       |       :50051          |
+                    |       +----------------------+
+                    |              |
+                    |              | PostgreSQL
+                    |              v
+                    |       +----------------------+
+                    |       | analytics_clicks     |
+                    |       | processed_events     |
+                    |       +----------------------+
+                    |
+                    | gRPC
+                    v
+             Analytics Service
 ```
 
-### Власність даних
+Під час redirect основний потік не очікує виконання аналітичної операції через gRPC. Link Service публікує подію `ClickRegistered` у RabbitMQ.
+
+Analytics Service отримує подію з черги, обробляє її та після успішної транзакції надсилає ACK.
+
+gRPC використовується для операцій читання аналітики:
+
+- `GetLinkAnalytics`;
+- `GetTotalClicks`.
+
+---
+
+# Власність даних
 
 **Link Service** володіє:
 
@@ -95,13 +121,14 @@ Analytics Service відповідає за:
 
 **Analytics Service** володіє:
 
-- `analytics_clicks`.
+- `analytics_clicks`;
+- `processed_events`.
 
 Analytics Service не виконує SQL-запити до таблиць Link Service.
 
 ---
 
-## Структура проєкту
+# Структура проєкту
 
 ```text
 shear.ly/
@@ -141,6 +168,9 @@ shear.ly/
 │   ├── grpc/
 │   │   └── analytics.client.ts
 │   │
+│   ├── messaging/
+│   │   └── rabbitmq.publisher.ts
+│   │
 │   ├── middleware/
 │   │   └── error.middleware.ts
 │   │
@@ -166,7 +196,8 @@ shear.ly/
     ├── package.json
     │
     ├── migrations/
-    │   └── 001_create_analytics.sql
+    │   ├── 001_create_analytics.sql
+    │   └── 002_create_processed_events.sql
     │
     ├── proto/
     │   └── analytics.proto
@@ -175,6 +206,7 @@ shear.ly/
         ├── server.ts
         ├── analytics.repository.ts
         ├── analytics.service.ts
+        ├── rabbitmq.consumer.ts
         │
         └── generated/
             └── analytics.ts
@@ -222,6 +254,15 @@ POSTGRES_PORT=5432
 POSTGRES_DB=shearly
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
+
+POSTGRES_REPLICA_HOST=127.0.0.1
+POSTGRES_REPLICA_PORT=5433
+
+RABBITMQ_HOST=127.0.0.1
+RABBITMQ_PORT=5672
+RABBITMQ_USER=shear
+RABBITMQ_PASSWORD=shear_password
+
 PORT=3000
 ```
 
@@ -241,8 +282,18 @@ POSTGRES_PORT=5432
 POSTGRES_DB=shearly
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
+
 GRPC_PORT=50051
+
+RABBITMQ_HOST=127.0.0.1
+RABBITMQ_PORT=5672
+RABBITMQ_USER=shear
+RABBITMQ_PASSWORD=shear_password
+
+CONSUMER_CRASH_DELAY_MS=0
 ```
+
+`CONSUMER_CRASH_DELAY_MS` використовується для контрольованого тестування повторної доставки повідомлень. У штатному режимі значення повинно бути `0`.
 
 Файли `.env` не повинні додаватися до Git.
 
@@ -250,30 +301,57 @@ GRPC_PORT=50051
 
 ---
 
-# Запуск PostgreSQL
+# Запуск інфраструктури
 
-PostgreSQL запускається через Docker Compose:
+PostgreSQL та RabbitMQ запускаються через Docker Compose:
 
 ```bash
 docker compose up -d
 ```
 
-Перевірити стан контейнера:
+Перевірити стан контейнерів:
 
 ```bash
 docker ps
 ```
 
-Очікується контейнер:
+Основні контейнери:
 
 ```text
 shearly-postgres
+shearly-postgres-replica
+shearly-rabbitmq
 ```
 
 PostgreSQL доступний на:
 
 ```text
 127.0.0.1:5432
+```
+
+Репліка PostgreSQL доступна на:
+
+```text
+127.0.0.1:5433
+```
+
+RabbitMQ AMQP:
+
+```text
+127.0.0.1:5672
+```
+
+RabbitMQ Management UI:
+
+```text
+http://localhost:15672
+```
+
+Облікові дані RabbitMQ:
+
+```text
+Username: shear
+Password: shear_password
 ```
 
 ---
@@ -326,13 +404,15 @@ idem_keys
 
 ## Analytics Service
 
-Міграція знаходиться у:
+### Таблиця `analytics_clicks`
+
+Файл:
 
 ```text
 analytics-service/migrations/001_create_analytics.sql
 ```
 
-Створюється таблиця:
+Створює таблицю:
 
 ```text
 analytics_clicks
@@ -343,7 +423,24 @@ analytics_clicks
 └── created_at
 ```
 
-Analytics Service використовує цю таблицю для зберігання статистики переходів.
+### Таблиця `processed_events`
+
+Файл:
+
+```text
+analytics-service/migrations/002_create_processed_events.sql
+```
+
+Створює таблицю:
+
+```text
+processed_events
+
+├── event_id
+└── processed_at
+```
+
+`event_id` є первинним ключем та використовується для ідемпотентної обробки повідомлень RabbitMQ.
 
 ---
 
@@ -362,6 +459,270 @@ cd analytics-service
 npm install
 cd ..
 ```
+
+---
+
+# RabbitMQ
+
+Для асинхронної реєстрації переходів використовується RabbitMQ.
+
+Основні параметри:
+
+```text
+Exchange: shearly.events
+Type: direct
+Routing key: click.registered
+Queue: analytics.clicks
+```
+
+Exchange та queue є durable.
+
+Повідомлення публікуються як persistent.
+
+---
+
+# Подія ClickRegistered
+
+Під час успішного redirect Link Service створює подію:
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "ClickRegistered",
+  "shortCode": "c7436671",
+  "occurredAt": "2026-10-06T13:57:51.000Z"
+}
+```
+
+Подія публікується в exchange:
+
+```text
+shearly.events
+```
+
+з routing key:
+
+```text
+click.registered
+```
+
+RabbitMQ передає повідомлення в чергу:
+
+```text
+analytics.clicks
+```
+
+Analytics Service споживає повідомлення з цієї черги.
+
+---
+
+# Взаємодія сервісів
+
+Під час перенаправлення:
+
+```http
+GET /links/r/:shortCode
+```
+
+виконується така послідовність:
+
+```text
+Client
+   |
+   | GET /links/r/c7436671
+   v
+Link Service
+   |
+   | пошук посилання
+   v
+PostgreSQL
+   |
+   | link
+   v
+Link Service
+   |
+   | ClickRegistered
+   v
+RabbitMQ
+   |
+   | analytics.clicks
+   v
+Analytics Service
+   |
+   | BEGIN
+   | processed_events
+   | analytics_clicks
+   | COMMIT
+   |
+   | ACK
+   v
+RabbitMQ
+```
+
+Після публікації події Link Service виконує HTTP redirect на оригінальний URL.
+
+Аналітична операція виконується асинхронно та не залежить від безпосереднього виконання consumer у момент redirect.
+
+---
+
+# Analytics Service Consumer
+
+Consumer реалізований у:
+
+```text
+analytics-service/src/rabbitmq.consumer.ts
+```
+
+Він:
+
+1. підключається до RabbitMQ;
+2. створює durable exchange та queue;
+3. прив'язує queue до exchange;
+4. отримує `ClickRegistered`;
+5. перевіряє `eventId`;
+6. записує подію в `processed_events`;
+7. збільшує `click_count`;
+8. виконує `COMMIT`;
+9. надсилає `ACK`.
+
+Для consumer використовується:
+
+```text
+noAck = false
+```
+
+Тобто повідомлення підтверджується вручну.
+
+ACK надсилається тільки після успішного завершення транзакції PostgreSQL.
+
+---
+
+# Ідемпотентність Consumer
+
+Для захисту від повторної доставки використовується таблиця:
+
+```text
+processed_events
+```
+
+Перевірка виконується за допомогою:
+
+```sql
+INSERT INTO processed_events (event_id)
+VALUES ($1)
+ON CONFLICT (event_id) DO NOTHING
+RETURNING event_id;
+```
+
+Обробка події виконується в одній транзакції:
+
+```text
+BEGIN
+  |
+  | INSERT processed_events
+  |
+  | UPDATE analytics_clicks
+  |
+COMMIT
+  |
+  v
+ACK
+```
+
+Якщо `eventId` уже існує, повторна доставка не змінює `analytics_clicks`.
+
+Таким чином, consumer є ідемпотентним.
+
+---
+
+# At-least-once delivery
+
+RabbitMQ consumer використовує manual ACK.
+
+Якщо повідомлення було отримано, але ACK не був відправлений, RabbitMQ може повторно доставити це повідомлення.
+
+Для перевірки цього сценарію використовується:
+
+```env
+CONSUMER_CRASH_DELAY_MS=10000
+```
+
+Після успішної транзакції consumer очікує перед відправленням ACK.
+
+Якщо consumer примусово завершити під час цієї паузи, повідомлення залишиться непідтвердженим.
+
+Після повторного запуску Analytics Service RabbitMQ доставляє повідомлення повторно.
+
+Приклад логів:
+
+```text
+Received ClickRegistered: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb, shortCode=c7436671
+Event processed: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb, shortCode=c7436671
+Waiting 10000ms before ACK: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb
+```
+
+Після завершення consumer без ACK RabbitMQ показує повідомлення в черзі:
+
+```text
+analytics.clicks    1    0
+```
+
+Після повторного запуску:
+
+```text
+Received ClickRegistered: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb, shortCode=c7436671
+Duplicate event ignored: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb, shortCode=c7436671
+ACK sent: eventId=e04ee81e-1dd7-4deb-b680-9ca2a15706eb, processed=false
+```
+
+Одна й та сама подія була доставлена двічі, але повторного ефекту в базі даних не відбулося.
+
+---
+
+# Перевірка RabbitMQ
+
+Переглянути черги:
+
+```powershell
+docker exec shearly-rabbitmq rabbitmqctl list_queues name messages consumers
+```
+
+При активному consumer:
+
+```text
+name              messages    consumers
+analytics.clicks  0           1
+```
+
+Якщо consumer тимчасово зупинений і є необроблені повідомлення:
+
+```text
+name              messages    consumers
+analytics.clicks  1           0
+```
+
+Після повторного запуску consumer повідомлення обробляються та підтверджуються.
+
+---
+
+# gRPC API
+
+gRPC використовується для операцій читання аналітики.
+
+Контракт визначений у:
+
+```text
+analytics.proto
+```
+
+Analytics Service надає методи:
+
+```text
+GetLinkAnalytics
+GetTotalClicks
+```
+
+Реєстрація переходу під час redirect більше не виконується через синхронний `RegisterClick`. Замість цього використовується подія `ClickRegistered` через RabbitMQ.
 
 ---
 
@@ -405,62 +766,6 @@ npx.cmd protoc `
 
 ---
 
-# gRPC API
-
-Контракт визначений у:
-
-```text
-analytics.proto
-```
-
-Analytics Service надає три методи:
-
-```text
-RegisterClick
-GetLinkAnalytics
-GetTotalClicks
-```
-
-## RegisterClick
-
-Реєструє перехід за коротким кодом.
-
-```proto
-rpc RegisterClick(RegisterClickRequest)
-    returns (RegisterClickResponse);
-```
-
-Запит:
-
-```proto
-message RegisterClickRequest {
-    string short_code = 1;
-    string user_agent = 2;
-}
-```
-
-Поле `user_agent` було додано під час експерименту зі зміною схеми.
-
-## GetLinkAnalytics
-
-Повертає статистику окремого короткого посилання:
-
-```proto
-rpc GetLinkAnalytics(GetLinkAnalyticsRequest)
-    returns (GetLinkAnalyticsResponse);
-```
-
-## GetTotalClicks
-
-Повертає загальну кількість переходів:
-
-```proto
-rpc GetTotalClicks(GetTotalClicksRequest)
-    returns (GetTotalClicksResponse);
-```
-
----
-
 # Запуск Analytics Service
 
 Перейти до каталогу:
@@ -478,14 +783,16 @@ npm.cmd run dev
 Очікується повідомлення:
 
 ```text
-Analytics gRPC server is running on port 50051
+RabbitMQ consumer started: queue=analytics.clicks
 ```
 
-Analytics Service працює на:
+Analytics Service працює з gRPC на:
 
 ```text
 localhost:50051
 ```
+
+та одночасно споживає повідомлення з RabbitMQ.
 
 ---
 
@@ -497,57 +804,11 @@ localhost:50051
 npm.cmd run dev
 ```
 
-Очікується повідомлення:
-
-```text
-Shear.ly server is running on port 3000
-```
-
 Link Service доступний за адресою:
 
 ```text
 http://localhost:3000
 ```
-
----
-
-# Взаємодія сервісів
-
-Зовнішній REST API залишається без змін.
-
-Під час перенаправлення:
-
-```text
-GET /links/r/:shortCode
-```
-
-відбувається така послідовність:
-
-```text
-Client
-   |
-   | GET /links/r/905e63a9
-   v
-Link Service
-   |
-   | пошук посилання
-   v
-PostgreSQL
-   |
-   | link
-   v
-Link Service
-   |
-   | gRPC RegisterClick
-   v
-Analytics Service
-   |
-   | INSERT / UPDATE
-   v
-analytics_clicks
-```
-
-Після успішної реєстрації переходу Link Service виконує HTTP redirect на оригінальний URL.
 
 ---
 
@@ -561,59 +822,26 @@ GET /links/r/:shortCode
 
 Приклад:
 
-```bash
-curl.exe -i http://localhost:3000/links/r/905e63a9
+```powershell
+Invoke-WebRequest http://localhost:3000/links/r/905e63a9 -MaximumRedirection 0 -ErrorAction SilentlyContinue
 ```
 
 Успішна відповідь:
 
 ```text
 HTTP/1.1 302 Found
-Location: https://github.com
+Location: https://...
 ```
 
-При кожному успішному перенаправленні Link Service викликає:
+Після знаходження короткого посилання Link Service публікує:
 
 ```text
-Analytics Service → RegisterClick
+ClickRegistered
 ```
 
-Analytics Service збільшує `click_count` у власній таблиці:
+у RabbitMQ.
 
-```text
-analytics_clicks
-```
-
----
-
-# Timeout та обробка недоступності Analytics Service
-
-Для gRPC-запиту встановлено deadline:
-
-```text
-1 секунда
-```
-
-Якщо Analytics Service недоступний або не відповідає протягом встановленого часу, Link Service не очікує необмежено довго.
-
-У такому випадку клієнт отримує:
-
-```http
-503 Service Unavailable
-```
-
-Приклад:
-
-```json
-{
-  "error": {
-    "code": "INTERNAL_SERVER_ERROR",
-    "message": "Analytics Service is unavailable"
-  }
-}
-```
-
-Таким чином, відмова Analytics Service не призводить до зависання REST-запиту.
+Після цього Analytics Service асинхронно збільшує `click_count`.
 
 ---
 
@@ -690,9 +918,9 @@ GET /links/r/:shortCode
 GET /links/r/905e63a9
 ```
 
-У відповідь API виконує HTTP redirect на оригінальний URL.
+API виконує HTTP redirect на оригінальний URL.
 
-При цьому статистика переходу передається до Analytics Service через gRPC.
+Реєстрація переходу виконується асинхронно через RabbitMQ.
 
 ---
 
@@ -767,7 +995,7 @@ Body:
 
 Перший запит створює коротке посилання.
 
-Повторний запит з тим самим `Idempotency-Key` і тим самим body повертає вже збережений результат та **не створює нове посилання**.
+Повторний запит з тим самим `Idempotency-Key` і тим самим body повертає вже збережений результат та не створює нове посилання.
 
 Якщо той самий ключ використати з іншим body, API повертає:
 
@@ -830,19 +1058,6 @@ API використовує єдиний формат помилок:
   "error": {
     "code": "IDEMPOTENCY_KEY_REUSED",
     "message": "Idempotency-Key was already used with a different request"
-  }
-}
-```
-
-## 503 Service Unavailable
-
-Повертається, якщо Analytics Service недоступний:
-
-```json
-{
-  "error": {
-    "code": "INTERNAL_SERVER_ERROR",
-    "message": "Analytics Service is unavailable"
   }
 }
 ```
@@ -944,6 +1159,14 @@ FROM analytics_clicks
 ORDER BY id;
 ```
 
+Переглянути оброблені події:
+
+```sql
+SELECT event_id, processed_at
+FROM processed_events
+ORDER BY processed_at;
+```
+
 Вийти з PostgreSQL:
 
 ```sql
@@ -952,38 +1175,95 @@ ORDER BY id;
 
 ---
 
-# Приклад перевірки Analytics Service
+# Приклад перевірки асинхронної аналітики
 
 Після виконання:
 
-```bash
-curl.exe -i http://localhost:3000/links/r/905e63a9
+```powershell
+Invoke-WebRequest http://localhost:3000/links/r/c7436671 -MaximumRedirection 0 -ErrorAction SilentlyContinue
 ```
 
 можна перевірити таблицю:
 
 ```sql
 SELECT *
-FROM analytics_clicks;
+FROM analytics_clicks
+WHERE short_code = 'c7436671';
 ```
 
 Приклад:
 
 ```text
- id | short_code | click_count
-----+------------+------------
-  1 | 905e63a9   | 2
+short_code | click_count
+------------+------------
+c7436671   | 4
 ```
 
-Це означає, що для короткого коду `905e63a9` було зареєстровано два переходи.
+Окремо можна перевірити оброблені події:
+
+```sql
+SELECT event_id, processed_at
+FROM processed_events
+ORDER BY processed_at DESC;
+```
+
+Кожна успішно оброблена подія має унікальний `event_id`.
+
+---
+
+# Перевірка повторної доставки
+
+Для контрольованого експерименту в `analytics-service/.env` можна встановити:
+
+```env
+CONSUMER_CRASH_DELAY_MS=10000
+```
+
+Після запуску Analytics Service та виконання redirect consumer виведе:
+
+```text
+Received ClickRegistered: eventId=..., shortCode=c7436671
+Event processed: eventId=..., shortCode=c7436671
+Waiting 10000ms before ACK: eventId=...
+```
+
+Якщо consumer примусово завершити до ACK, повідомлення залишиться в RabbitMQ.
+
+Перевірка:
+
+```powershell
+docker exec shearly-rabbitmq rabbitmqctl list_queues name messages consumers
+```
+
+Очікуваний результат:
+
+```text
+analytics.clicks    1    0
+```
+
+Після повторного запуску consumer та сама подія буде отримана повторно:
+
+```text
+Received ClickRegistered: eventId=...
+Duplicate event ignored: eventId=...
+ACK sent: eventId=..., processed=false
+```
+
+При цьому `click_count` не збільшиться вдруге.
+
+Після завершення експерименту необхідно повернути:
+
+```env
+CONSUMER_CRASH_DELAY_MS=0
+```
 
 ---
 
 # Schema Evolution
 
-У рамках лабораторної роботи було виконано експеримент зі зміною gRPC-контракту.
+gRPC-контракт підтримує розширення повідомлень без зміни номерів уже існуючих полів.
 
-Початкова структура:
+Наприклад, до:
 
 ```proto
 message RegisterClickRequest {
@@ -991,7 +1271,7 @@ message RegisterClickRequest {
 }
 ```
 
-Після зміни до контракту було додано нове поле:
+може бути додане нове поле:
 
 ```proto
 message RegisterClickRequest {
@@ -1000,53 +1280,9 @@ message RegisterClickRequest {
 }
 ```
 
-Було виконано такі дії:
+Номер існуючого поля `1` не змінюється та не використовується повторно.
 
-1. поле `user_agent` додано до `analytics.proto`;
-2. повторно згенеровано код тільки для Analytics Service;
-3. Analytics Service перезапущено;
-4. Link Service залишився зі старою версією згенерованого клієнта;
-5. виконано запит через старий Link Service;
-6. запит успішно оброблено новим Analytics Service.
-
-Старий клієнт продовжив працювати, оскільки він передає поле:
-
-```text
-short_code = 1
-```
-
-а нове поле:
-
-```text
-user_agent = 2
-```
-
-не є обов'язковим для старого клієнта.
-
-Номер існуючого поля `1` не змінювався та не використовувався повторно.
-
-Це демонструє сумісність старого клієнта з оновленою версією gRPC-сервера.
-
----
-
-# Зміни в лабораторній роботі №2
-
-Порівняно з лабораторною роботою №1 у проєкті Shear.ly було виконано такі зміни:
-
-- створено окремий **Analytics Service** для збору статистики переходів;
-- додано окрему таблицю `analytics_clicks` для зберігання аналітичних даних;
-- створено gRPC-контракт `analytics.proto`;
-- реалізовано три gRPC-методи: `RegisterClick`, `GetLinkAnalytics`, `GetTotalClicks`;
-- додано gRPC-клієнт у **Link Service**;
-- логіку збільшення кількості переходів перенесено до Analytics Service;
-- реалізовано взаємодію між сервісами через gRPC;
-- зовнішній REST API Link Service залишено без змін;
-- додано deadline **1 секунда** для gRPC-запиту;
-- реалізовано повернення HTTP `503 Service Unavailable`, якщо Analytics Service недоступний;
-- реалізовано розділення володіння даними між сервісами;
-- виконано перевірку роботи системи при зупиненому Analytics Service;
-- проведено експеримент **schema evolution** шляхом додавання поля `user_agent = 2`;
-- перевірено, що старий Link Service продовжує працювати з оновленим Analytics Service без повторної генерації клієнта.
+Такий підхід дозволяє старим клієнтам продовжувати взаємодіяти з оновленим сервером.
 
 ---
 
@@ -1063,7 +1299,8 @@ user_agent = 2
 - `links`;
 - `idem_keys`;
 - idempotency;
-- redirect.
+- redirect;
+- публікацію подій `ClickRegistered`.
 
 ## Analytics Service
 
@@ -1071,11 +1308,26 @@ user_agent = 2
 
 - статистику переходів;
 - `analytics_clicks`;
-- gRPC API аналітики.
+- `processed_events`;
+- обробку подій RabbitMQ;
+- gRPC API для читання аналітики.
 
 ## Взаємодія
 
-Сервіси взаємодіють тільки через визначений gRPC-контракт.
+Для запису події:
+
+```text
+Link Service
+     |
+     | ClickRegistered
+     v
+RabbitMQ
+     |
+     v
+Analytics Service
+```
+
+Для читання аналітики:
 
 ```text
 Link Service
@@ -1091,7 +1343,7 @@ Analytics Service не має прямого доступу до таблиць 
 
 # Зупинка сервісів
 
-Зупинити Link Service можна через:
+Зупинити Link Service:
 
 ```text
 Ctrl + C
@@ -1103,13 +1355,13 @@ Ctrl + C
 Ctrl + C
 ```
 
-Зупинити PostgreSQL:
+Зупинити інфраструктуру:
 
 ```bash
 docker compose down
 ```
 
-Щоб видалити також дані PostgreSQL:
+Щоб видалити також дані PostgreSQL та RabbitMQ:
 
 ```bash
 docker compose down -v
@@ -1147,7 +1399,7 @@ npm install
 cd ..
 ```
 
-### 5. Запустити PostgreSQL
+### 5. Запустити інфраструктуру
 
 ```bash
 docker compose up -d
@@ -1165,7 +1417,7 @@ npm.cmd run dev
 Очікується:
 
 ```text
-Analytics gRPC server is running on port 50051
+RabbitMQ consumer started: queue=analytics.clicks
 ```
 
 ### 7. Запустити Link Service
@@ -1176,16 +1428,10 @@ Analytics gRPC server is running on port 50051
 npm.cmd run dev
 ```
 
-Очікується:
-
-```text
-Shear.ly server is running on port 3000
-```
-
 ### 8. Перевірити API
 
 ```text
-GET http://localhost:3000/health
+http://localhost:3000/health
 ```
 
 Очікується:
@@ -1218,13 +1464,3 @@ Analytics Service наразі запускається у режимі розр
 cd analytics-service
 npm.cmd run dev
 ```
-
----
-
-# Результат лабораторної роботи
-
-У результаті виконання лабораторної роботи №2 монолітний REST-сервіс Shear.ly було декомпозовано на два незалежні сервіси — Link Service та Analytics Service.
-
-Link Service продовжує надавати REST API для роботи з короткими посиланнями, а Analytics Service відповідає за статистику переходів. Синхронна взаємодія між сервісами реалізована за допомогою gRPC. Для gRPC-викликів встановлено deadline, а при недоступності Analytics Service REST API повертає `503 Service Unavailable`.
-
-Кожен сервіс володіє власними даними, а взаємодія між ними виконується через визначений контракт `analytics.proto`. Також було проведено експеримент зі зміною gRPC-схеми та перевірено сумісність старого клієнта з оновленим сервером.

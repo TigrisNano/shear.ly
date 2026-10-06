@@ -27,5 +27,12 @@ export const env = {
     password: getEnv("POSTGRES_PASSWORD"),
   },
 
+  rabbitmq: {
+    host: getEnv("RABBITMQ_HOST"),
+    port: Number(getEnv("RABBITMQ_PORT")),
+    user: getEnv("RABBITMQ_USER"),
+    password: getEnv("RABBITMQ_PASSWORD"),
+  },
+
   port: Number(getEnv("PORT")),
 };
