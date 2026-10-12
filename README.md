@@ -132,15 +132,19 @@ Analytics Service не виконує SQL-запити до таблиць Link 
 
 ```text
 shear.ly/
-
-├── .env
+├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── Dockerfile
 ├── docker-compose.yml
 ├── package.json
 ├── package-lock.json
 ├── tsconfig.json
 ├── README.md
+│
+├── postgres/
+│   ├── 00_create_replicator.sql
+│   └── pg_hba.conf
 │
 ├── migrations/
 │   ├── 001_create_links.sql
@@ -152,67 +156,54 @@ shear.ly/
 ├── src/
 │   ├── app.ts
 │   ├── server.ts
-│   │
 │   ├── config/
 │   │   └── env.ts
-│   │
 │   ├── controllers/
 │   │   └── link.controller.ts
-│   │
 │   ├── db/
 │   │   └── database.ts
-│   │
 │   ├── generated/
 │   │   └── analytics.ts
-│   │
 │   ├── grpc/
 │   │   └── analytics.client.ts
-│   │
 │   ├── messaging/
 │   │   └── rabbitmq.publisher.ts
-│   │
 │   ├── middleware/
 │   │   └── error.middleware.ts
-│   │
 │   ├── proto/
 │   │   └── analytics.proto
-│   │
 │   ├── repositories/
-│   │   ├── link.repository.ts
-│   │   └── idempotency.repository.ts
-│   │
+│   │   ├── idempotency.repository.ts
+│   │   └── link.repository.ts
 │   ├── routes/
 │   │   └── link.routes.ts
-│   │
 │   ├── services/
 │   │   └── link.service.ts
-│   │
 │   └── types/
 │       └── link.types.ts
 │
 └── analytics-service/
-    │
-    ├── .env
+    ├── .dockerignore
+    ├── Dockerfile
     ├── package.json
-    │
+    ├── package-lock.json
+    ├── tsconfig.json
     ├── migrations/
     │   ├── 001_create_analytics.sql
     │   └── 002_create_processed_events.sql
-    │
     ├── proto/
     │   └── analytics.proto
-    │
     └── src/
         ├── server.ts
+        ├── consumer.ts
         ├── analytics.repository.ts
         ├── analytics.service.ts
         ├── rabbitmq.consumer.ts
-        │
         └── generated/
             └── analytics.ts
 ```
 
----
+Примітка: `.env` та інші локальні конфігураційні файли не перелічено повністю, оскільки вони призначені для локального середовища й не повинні потрапляти до Git.
 
 # Вимоги
 
@@ -768,33 +759,38 @@ npx.cmd protoc `
 
 # Запуск Analytics Service
 
-Перейти до каталогу:
+Analytics Service надає gRPC API для отримання аналітики переходів. Він запускається окремо від RabbitMQ Consumer.
 
-```powershell
-cd analytics-service
-```
-
-Запустити сервіс:
+Для локального запуску gRPC-сервера відкрийте термінал у каталозі `analytics-service`:
 
 ```powershell
 npm.cmd run dev
 ```
 
-Очікується повідомлення:
-
-```text
-RabbitMQ consumer started: queue=analytics.clicks
-```
-
-Analytics Service працює з gRPC на:
+Сервер доступний за адресою:
 
 ```text
 localhost:50051
 ```
 
-та одночасно споживає повідомлення з RabbitMQ.
+## Запуск RabbitMQ Consumer
 
----
+RabbitMQ Consumer є окремим процесом, який отримує події з черги `analytics.clicks` і записує результати до PostgreSQL.
+
+У другому терміналі з каталогу `analytics-service` виконайте:
+
+```powershell
+npm.cmd run build
+node .\dist\consumer.js
+```
+
+Після успішного підключення очікується повідомлення:
+
+```text
+RabbitMQ consumer started: queue=analytics.clicks
+```
+
+Для звичайного запуску всієї системи рекомендовано використовувати Docker Compose, який запускає gRPC-сервер і Consumer в окремих контейнерах.
 
 # Запуск Link Service
 
@@ -1341,100 +1337,42 @@ Analytics Service не має прямого доступу до таблиць 
 
 ---
 
-# Зупинка сервісів
+# Docker Compose
 
-Зупинити Link Service:
+## Запуск усієї системи
 
-```text
-Ctrl + C
-```
+Для запуску проєкту на новій машині необхідні Git і Docker Desktop із підтримкою Docker Compose.
 
-Зупинити Analytics Service:
+Клонуйте репозиторій:
 
-```text
-Ctrl + C
-```
-
-Зупинити інфраструктуру:
-
-```bash
-docker compose down
-```
-
-Щоб видалити також дані PostgreSQL та RabbitMQ:
-
-```bash
-docker compose down -v
-```
-
----
-
-# Локальний запуск
-
-Повний порядок запуску:
-
-### 1. Клонувати репозиторій
-
-```bash
-git clone <repository-url>
-```
-
-### 2. Перейти до проєкту
-
-```bash
+```powershell
+git clone https://github.com/TigrisNano/shear.ly.git
 cd shear.ly
 ```
 
-### 3. Встановити залежності Link Service
-
-```bash
-npm install
-```
-
-### 4. Встановити залежності Analytics Service
-
-```bash
-cd analytics-service
-npm install
-cd ..
-```
-
-### 5. Запустити інфраструктуру
-
-```bash
-docker compose up -d
-```
-
-### 6. Запустити Analytics Service
-
-В окремому терміналі:
+Зберіть образи та запустіть усі сервіси однією командою:
 
 ```powershell
-cd analytics-service
-npm.cmd run dev
+docker compose up --build -d
 ```
 
-Очікується:
+Docker Compose запускає Link Service, Analytics Service, RabbitMQ Consumer, основну базу PostgreSQL, репліку PostgreSQL, RabbitMQ і SonarQube з окремою базою даних.
 
-```text
-RabbitMQ consumer started: queue=analytics.clicks
-```
+Для стандартного запуску через Docker Compose вручну встановлювати Node.js, npm або створювати файл `.env` не потрібно. Конфігурація контейнерів передається через змінні середовища в `docker-compose.yml`.
 
-### 7. Запустити Link Service
-
-У ще одному терміналі:
+Перевірити стан контейнерів:
 
 ```powershell
-npm.cmd run dev
+docker compose ps
 ```
 
-### 8. Перевірити API
+Перевірити API:
 
-```text
-http://localhost:3000/health
+```powershell
+Invoke-RestMethod http://localhost:3000/health
 ```
 
-Очікується:
+Очікувана відповідь:
 
 ```json
 {
@@ -1442,25 +1380,76 @@ http://localhost:3000/health
 }
 ```
 
----
+## Багатостадійні Docker-збірки
 
-# Production build
+Для Link Service та Analytics Service використовуються окремі Dockerfile з двома стадіями:
 
-Для Link Service:
+- `build` – встановлення залежностей і компіляція TypeScript;
+- `production` – встановлення лише production-залежностей і копіювання скомпільованого коду.
 
-```bash
-npm run build
-```
+Фінальні образи не містять компілятора TypeScript та інструментів, потрібних лише для збірки.
 
-Після успішної компіляції:
+Файли збірки:
 
-```bash
-npm start
-```
+- `Dockerfile`
+- `analytics-service/Dockerfile`
+- `.dockerignore`
+- `analytics-service/.dockerignore`
 
-Analytics Service наразі запускається у режимі розробки:
+## Масштабування RabbitMQ Consumer
+
+Кількість екземплярів Consumer можна змінити без модифікації коду:
 
 ```powershell
-cd analytics-service
-npm.cmd run dev
+docker compose up -d --scale analytics-consumer=3
 ```
+
+Перевірити кількість запущених екземплярів:
+
+```powershell
+docker compose ps analytics-consumer
+```
+
+Переглянути чергу та кількість підключених споживачів:
+
+```powershell
+docker exec shearly-rabbitmq rabbitmqctl list_queues name messages consumers
+```
+
+Під час перевірки було створено коротке посилання та виконано п'ять переходів. Повідомлення розподілилися між трьома екземплярами Consumer: два, два та один. Усі п'ять подій було оброблено, після чого для кожної надіслано ACK. У таблиці `analytics_clicks` для тестового посилання зафіксовано `click_count = 5`.
+
+Це демонструє розподіл повідомлень між конкуруючими споживачами однієї черги.
+
+## PostgreSQL Replication
+
+PostgreSQL працює з основним екземпляром і реплікою. Репліка отримує WAL від основної бази в асинхронному режимі.
+
+Перевірити стан реплікації:
+
+```powershell
+docker exec shearly-postgres psql -U postgres -d shearly -c "SELECT application_name, state, sync_state FROM pg_stat_replication;"
+```
+
+Очікуваний стан активного підключення репліки – `streaming`, режим синхронізації – `async`.
+
+## Зупинка системи
+
+Зупинити контейнери, зберігши дані в Docker volumes:
+
+```powershell
+docker compose down
+```
+
+Повторно запустити систему:
+
+```powershell
+docker compose up -d
+```
+
+Для запуску після зміни коду або конфігурації з перебудовою образів:
+
+```powershell
+docker compose up --build -d
+```
+
+Docker volumes зберігають дані PostgreSQL, RabbitMQ та SonarQube між перезапусками. Не використовуйте `docker compose down -v`, якщо потрібно зберегти наявні дані.

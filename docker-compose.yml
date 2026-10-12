@@ -24,8 +24,14 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - ./postgres/00_create_replicator.sql:/docker-entrypoint-initdb.d/00_create_replicator.sql:ro
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./migrations/001_create_links.sql:/docker-entrypoint-initdb.d/01_create_links.sql:ro
+      - ./migrations/002_create_idempotency_keys.sql:/docker-entrypoint-initdb.d/02_create_idempotency_keys.sql:ro
+      - ./analytics-service/migrations/001_create_analytics.sql:/docker-entrypoint-initdb.d/03_create_analytics.sql:ro
+      - ./analytics-service/migrations/002_create_processed_events.sql:/docker-entrypoint-initdb.d/04_create_processed_events.sql:ro
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d shearly"]
       interval: 5s
@@ -118,6 +124,74 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_REPLICA_HOST: postgres-replica
+      POSTGRES_REPLICA_PORT: 5432
+      POSTGRES_DB: shearly
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: shear
+      RABBITMQ_PASSWORD: shear_password
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      GRPC_PORT: 50051
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: shearly
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  analytics-consumer:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["node", "dist/consumer.js"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: shearly
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: shear
+      RABBITMQ_PASSWORD: shear_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   postgres_data:

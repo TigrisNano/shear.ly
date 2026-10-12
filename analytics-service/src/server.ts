@@ -13,8 +13,6 @@ import {
   getTotalClicksService,
 } from "./analytics.service";
 
-import { startRabbitMQConsumer } from "./rabbitmq.consumer";
-
 const analyticsServer: AnalyticsServiceServer = {
   registerClick: async (call, callback) => {
     try {
@@ -94,8 +92,3 @@ server.bindAsync(
     }
   },
 );
-
-startRabbitMQConsumer().catch((error) => {
-  console.error("Failed to start RabbitMQ consumer:", error);
-  process.exit(1);
-});

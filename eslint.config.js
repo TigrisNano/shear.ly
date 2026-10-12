@@ -2,7 +2,7 @@ const noConsoleLog = require("./eslint-rules/no-console-log.js");
 
 module.exports = [
   {
-    files: ["src/server.ts"],
+    files: ["src/**/*.ts"],
     languageOptions: {
       parserOptions: {
         ecmaVersion: "latest",
