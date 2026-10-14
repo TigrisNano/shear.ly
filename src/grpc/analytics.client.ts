@@ -8,7 +8,7 @@ import {
 } from "@grpc/grpc-js";
 
 const client = new AnalyticsServiceClient(
-  "localhost:50051",
+  process.env.ANALYTICS_GRPC_HOST ?? "localhost:50051",
   credentials.createInsecure(),
 );
 

@@ -132,6 +132,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: 3000
+      ANALYTICS_GRPC_HOST: analytics-service:50051
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_REPLICA_HOST: postgres-replica
