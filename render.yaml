@@ -1,4 +1,4 @@
-<escape>services:
+services:
   - type: web
     name: shearly-api
     runtime: image
@@ -10,4 +10,4 @@
       - key: PORT
         value: "3000"
       - key: POSTGRES_SSL
-        value: "true"</escape>
+        value: "true"
