@@ -4,7 +4,7 @@ services:
     runtime: image
     plan: free
     image:
-      url: ghcr.io/tigrisnano/shear.ly:b03e7c8
+      url: ghcr.io/tigrisnano/shear.ly:60a955e
     healthCheckPath: /health
     envVars:
       - key: PORT
