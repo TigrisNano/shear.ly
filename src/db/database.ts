@@ -7,6 +7,10 @@ export const pool = new Pool({
   database: env.postgres.database,
   user: env.postgres.user,
   password: env.postgres.password,
+  ssl:
+    process.env.POSTGRES_SSL === "true"
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 
 export const replicaPool = new Pool({
@@ -15,4 +19,8 @@ export const replicaPool = new Pool({
   database: env.postgresReplica.database,
   user: env.postgresReplica.user,
   password: env.postgresReplica.password,
+  ssl:
+    process.env.POSTGRES_SSL === "true"
+      ? { rejectUnauthorized: false }
+      : undefined,
 });

@@ -12,12 +12,14 @@ async function getChannel(): Promise<Channel> {
     return channel;
   }
 
-  connection = await amqp.connect({
-    hostname: env.rabbitmq.host,
-    port: env.rabbitmq.port,
-    username: env.rabbitmq.user,
-    password: env.rabbitmq.password,
-  });
+  connection = await amqp.connect(
+    process.env.RABBITMQ_URL || {
+      hostname: env.rabbitmq.host,
+      port: env.rabbitmq.port,
+      username: env.rabbitmq.user,
+      password: env.rabbitmq.password,
+    },
+  );
 
   channel = await connection.createChannel();
 

@@ -11,6 +11,10 @@ const pool = new Pool({
   database: process.env.POSTGRES_DB || "shearly",
   user: process.env.POSTGRES_USER || "postgres",
   password: process.env.POSTGRES_PASSWORD || "postgres",
+  ssl:
+    process.env.POSTGRES_SSL === "true"
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 
 let connection: ChannelModel;
@@ -82,12 +86,14 @@ async function processClickRegistered(
 }
 
 export async function startRabbitMQConsumer(): Promise<void> {
-  connection = await amqp.connect({
-    hostname: process.env.RABBITMQ_HOST || "127.0.0.1",
-    port: Number(process.env.RABBITMQ_PORT || 5672),
-    username: process.env.RABBITMQ_USER || "shear",
-    password: process.env.RABBITMQ_PASSWORD || "shear_password",
-  });
+  connection = await amqp.connect(
+    process.env.RABBITMQ_URL || {
+      hostname: process.env.RABBITMQ_HOST || "127.0.0.1",
+      port: Number(process.env.RABBITMQ_PORT || 5672),
+      username: process.env.RABBITMQ_USER || "shear",
+      password: process.env.RABBITMQ_PASSWORD || "shear_password",
+    },
+  );
 
   channel = await connection.createChannel();
 

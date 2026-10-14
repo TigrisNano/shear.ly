@@ -20,18 +20,18 @@ export const env = {
   },
 
   postgresReplica: {
-    host: getEnv("POSTGRES_REPLICA_HOST"),
-    port: Number(getEnv("POSTGRES_REPLICA_PORT")),
+    host: process.env.POSTGRES_REPLICA_HOST || getEnv("POSTGRES_HOST"),
+    port: Number(process.env.POSTGRES_REPLICA_PORT || getEnv("POSTGRES_PORT")),
     database: getEnv("POSTGRES_DB"),
     user: getEnv("POSTGRES_USER"),
     password: getEnv("POSTGRES_PASSWORD"),
   },
 
   rabbitmq: {
-    host: getEnv("RABBITMQ_HOST"),
-    port: Number(getEnv("RABBITMQ_PORT")),
-    user: getEnv("RABBITMQ_USER"),
-    password: getEnv("RABBITMQ_PASSWORD"),
+    host: process.env.RABBITMQ_HOST || "localhost",
+    port: Number(process.env.RABBITMQ_PORT || 5672),
+    user: process.env.RABBITMQ_USER || "shear",
+    password: process.env.RABBITMQ_PASSWORD || "your_password",
   },
 
   port: Number(getEnv("PORT")),
