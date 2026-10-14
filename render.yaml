@@ -1,0 +1,13 @@
+<escape>services:
+  - type: web
+    name: shearly-api
+    runtime: image
+    plan: free
+    image:
+      url: ghcr.io/tigrisnano/shear.ly:b03e7c8
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: POSTGRES_SSL
+        value: "true"</escape>
