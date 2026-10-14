@@ -73,7 +73,11 @@ export async function getLinkByShortCode(shortCode: string) {
     return undefined;
   }
 
-  await publishClickRegistered(shortCode);
+  try {
+    await publishClickRegistered(shortCode);
+  } catch (error) {
+    console.error("Failed to publish click event:", error);
+  }
 
   return link;
 }
