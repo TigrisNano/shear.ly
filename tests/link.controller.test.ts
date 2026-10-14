@@ -23,37 +23,30 @@ function createTestApp() {
   return app;
 }
 
+async function expectInvalidUrl(originalUrl?: string) {
+  const payload = originalUrl === undefined ? {} : { originalUrl };
+  const response = await request(createTestApp()).post("/links").send(payload);
+
+  expect(response.status).toBe(400);
+  expect(response.body.error.code).toBe("INVALID_URL");
+  expect(createShortLinkMock).not.toHaveBeenCalled();
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
 
 describe("POST /links", () => {
   it("returns 400 when originalUrl is missing", async () => {
-    const response = await request(createTestApp()).post("/links").send({});
-
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe("INVALID_URL");
-    expect(createShortLinkMock).not.toHaveBeenCalled();
+    await expectInvalidUrl();
   });
 
   it("returns 400 when originalUrl is not a valid URL", async () => {
-    const response = await request(createTestApp())
-      .post("/links")
-      .send({ originalUrl: "not-a-url" });
-
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe("INVALID_URL");
-    expect(createShortLinkMock).not.toHaveBeenCalled();
+    await expectInvalidUrl("not-a-url");
   });
 
   it("rejects FTP URLs", async () => {
-    const response = await request(createTestApp())
-      .post("/links")
-      .send({ originalUrl: "ftp://example.com/file" });
-
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe("INVALID_URL");
-    expect(createShortLinkMock).not.toHaveBeenCalled();
+    await expectInvalidUrl("ftp://example.com/file");
   });
 
   it("creates a link for a valid HTTPS URL", async () => {
@@ -62,7 +55,6 @@ describe("POST /links", () => {
       original_url: "https://example.com",
       short_code: "abc12345",
     };
-
     createShortLinkMock.mockResolvedValue(createdLink as never);
 
     const response = await request(createTestApp())
@@ -72,9 +64,7 @@ describe("POST /links", () => {
     expect(response.status).toBe(201);
     expect(response.body).toEqual(createdLink);
     expect(createShortLinkMock).toHaveBeenCalledWith(
-      {
-        originalUrl: "https://example.com",
-      },
+      { originalUrl: "https://example.com" },
       undefined,
     );
   });
@@ -93,9 +83,7 @@ describe("POST /links", () => {
 
     expect(response.status).toBe(201);
     expect(createShortLinkMock).toHaveBeenCalledWith(
-      {
-        originalUrl: "https://example.org",
-      },
+      { originalUrl: "https://example.org" },
       "test-key-123",
     );
   });
