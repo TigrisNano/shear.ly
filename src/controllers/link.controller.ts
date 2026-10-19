@@ -57,7 +57,8 @@ export async function createLinkController(req: Request, res: Response) {
 export async function redirectLinkController(req: Request, res: Response) {
   const shortCode = String(req.params.shortCode);
 
-  const link = await getLinkByShortCode(shortCode);
+  const correlationId = String(res.locals.correlationId);
+  const link = await getLinkByShortCode(shortCode, correlationId);
 
   if (!link) {
     return res.status(404).json({

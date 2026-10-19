@@ -1,5 +1,6 @@
 import amqp, { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import { Pool } from "pg";
+import { retry } from "./retry";
 
 const EXCHANGE_NAME = "shearly.events";
 const QUEUE_NAME = "analytics.clicks";
@@ -15,6 +16,11 @@ const pool = new Pool({
     process.env.POSTGRES_SSL === "true"
       ? { rejectUnauthorized: false }
       : undefined,
+  connectionTimeoutMillis: 5000,
+  query_timeout: 5000,
+  statement_timeout: 5000,
+  idleTimeoutMillis: 30000,
+  keepAlive: true,
 });
 
 let connection: ChannelModel;
@@ -24,6 +30,7 @@ type ClickRegisteredEvent = {
   eventId: string;
   eventType: "ClickRegistered";
   shortCode: string;
+  correlationId: string;
   occurredAt: string;
 };
 
@@ -53,7 +60,15 @@ async function processClickRegistered(
       await client.query("COMMIT");
 
       console.log(
-        `Duplicate event ignored: eventId=${event.eventId}, shortCode=${event.shortCode}`,
+        JSON.stringify({
+          level: "info",
+          service: "analytics-consumer",
+          event: "duplicate_event_ignored",
+          eventId: event.eventId,
+          shortCode: event.shortCode,
+          correlationId: event.correlationId,
+          timestamp: new Date().toISOString(),
+        }),
       );
 
       return false;
@@ -73,7 +88,15 @@ async function processClickRegistered(
     await client.query("COMMIT");
 
     console.log(
-      `Event processed: eventId=${event.eventId}, shortCode=${event.shortCode}`,
+      JSON.stringify({
+        level: "info",
+        service: "analytics-consumer",
+        event: "click_event_processed",
+        eventId: event.eventId,
+        shortCode: event.shortCode,
+        correlationId: event.correlationId,
+        timestamp: new Date().toISOString(),
+      }),
     );
 
     return true;
@@ -86,12 +109,23 @@ async function processClickRegistered(
 }
 
 export async function startRabbitMQConsumer(): Promise<void> {
-  connection = await amqp.connect(
-    process.env.RABBITMQ_URL || {
-      hostname: process.env.RABBITMQ_HOST || "127.0.0.1",
-      port: Number(process.env.RABBITMQ_PORT || 5672),
-      username: process.env.RABBITMQ_USER || "shear",
-      password: process.env.RABBITMQ_PASSWORD || "shear_password",
+  connection = await retry(
+    () =>
+      amqp.connect(
+        process.env.RABBITMQ_URL || {
+          hostname: process.env.RABBITMQ_HOST || "127.0.0.1",
+          port: Number(process.env.RABBITMQ_PORT || 5672),
+          username: process.env.RABBITMQ_USER || "shear",
+          password: process.env.RABBITMQ_PASSWORD || "shear_password",
+        },
+        {
+          timeout: 5000,
+        },
+      ),
+    {
+      maxAttempts: 3,
+      baseDelayMs: 200,
+      maxDelayMs: 2000,
     },
   );
 
@@ -122,7 +156,15 @@ export async function startRabbitMQConsumer(): Promise<void> {
         ) as ClickRegisteredEvent;
 
         console.log(
-          `Received ClickRegistered: eventId=${event.eventId}, shortCode=${event.shortCode}`,
+          JSON.stringify({
+            level: "info",
+            service: "analytics-consumer",
+            event: "click_event_received",
+            eventId: event.eventId,
+            shortCode: event.shortCode,
+            correlationId: event.correlationId,
+            timestamp: new Date().toISOString(),
+          }),
         );
 
         const processed = await processClickRegistered(event);

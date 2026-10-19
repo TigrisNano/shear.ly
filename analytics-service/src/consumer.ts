@@ -1,3 +1,5 @@
+import "./instrumentation";
+
 import "dotenv/config";
 
 import { startRabbitMQConsumer } from "./rabbitmq.consumer";

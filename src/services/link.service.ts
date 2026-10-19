@@ -66,17 +66,28 @@ export async function createShortLink(
   return link;
 }
 
-export async function getLinkByShortCode(shortCode: string) {
+export async function getLinkByShortCode(
+  shortCode: string,
+  correlationId: string,
+) {
   const link = await findLinkByShortCode(shortCode);
 
-  if (!link) {
-    return undefined;
-  }
+  if (!link) return undefined;
 
   try {
-    await publishClickRegistered(shortCode);
+    await publishClickRegistered(shortCode, correlationId);
   } catch (error) {
-    console.error("Failed to publish click event:", error);
+    console.error(
+      JSON.stringify({
+        level: "error",
+        service: "shearly-api",
+        event: "click_event_publish_failed",
+        correlationId,
+        shortCode,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      }),
+    );
   }
 
   return link;

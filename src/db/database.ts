@@ -1,7 +1,17 @@
+
 import { Pool } from "pg";
 import { env } from "../config/env";
 
+const timeoutOptions = {
+  connectionTimeoutMillis: 5000,
+  query_timeout: 5000,
+  statement_timeout: 5000,
+  idleTimeoutMillis: 30000,
+  keepAlive: true,
+};
+
 export const pool = new Pool({
+  ...timeoutOptions,
   host: env.postgres.host,
   port: env.postgres.port,
   database: env.postgres.database,
@@ -14,6 +24,7 @@ export const pool = new Pool({
 });
 
 export const replicaPool = new Pool({
+  ...timeoutOptions,
   host: env.postgresReplica.host,
   port: env.postgresReplica.port,
   database: env.postgresReplica.database,

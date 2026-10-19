@@ -125,6 +125,15 @@ services:
       timeout: 5s
       retries: 10
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: shearly-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+
   api:
     build:
       context: .
@@ -144,6 +153,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: shear
       RABBITMQ_PASSWORD: shear_password
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
     ports:
       - "3000:3000"
     depends_on:
@@ -166,6 +176,7 @@ services:
       POSTGRES_DB: shearly
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
     ports:
       - "50051:50051"
     depends_on:
@@ -188,6 +199,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: shear
       RABBITMQ_PASSWORD: shear_password
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy

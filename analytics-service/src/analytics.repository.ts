@@ -1,3 +1,4 @@
+
 import { Pool } from "pg";
 
 const pool = new Pool({
@@ -6,18 +7,27 @@ const pool = new Pool({
   database: process.env.POSTGRES_DB || "shearly",
   user: process.env.POSTGRES_USER || "postgres",
   password: process.env.POSTGRES_PASSWORD || "postgres",
+  ssl:
+    process.env.POSTGRES_SSL === "true"
+      ? { rejectUnauthorized: false }
+      : undefined,
+  connectionTimeoutMillis: 5000,
+  query_timeout: 5000,
+  statement_timeout: 5000,
+  idleTimeoutMillis: 30000,
+  keepAlive: true,
 });
 
 export async function registerClick(shortCode: string) {
   const result = await pool.query(
     `
-        INSERT INTO analytics_clicks (short_code, click_count)
-        VALUES ($1, 1)
-        ON CONFLICT (short_code)
-        DO UPDATE SET
-            click_count = analytics_clicks.click_count + 1
-        RETURNING *;
-        `,
+      INSERT INTO analytics_clicks (short_code, click_count)
+      VALUES ($1, 1)
+      ON CONFLICT (short_code)
+      DO UPDATE SET
+        click_count = analytics_clicks.click_count + 1
+      RETURNING *;
+    `,
     [shortCode],
   );
 
@@ -27,10 +37,10 @@ export async function registerClick(shortCode: string) {
 export async function getLinkAnalytics(shortCode: string) {
   const result = await pool.query(
     `
-        SELECT *
-        FROM analytics_clicks
-        WHERE short_code = $1;
-        `,
+      SELECT *
+      FROM analytics_clicks
+      WHERE short_code = $1;
+    `,
     [shortCode],
   );
 
@@ -40,9 +50,9 @@ export async function getLinkAnalytics(shortCode: string) {
 export async function getTotalClicks() {
   const result = await pool.query(
     `
-        SELECT COALESCE(SUM(click_count), 0)::integer AS total_clicks
-        FROM analytics_clicks;
-        `,
+      SELECT COALESCE(SUM(click_count), 0)::integer AS total_clicks
+      FROM analytics_clicks;
+    `,
   );
 
   return result.rows[0];

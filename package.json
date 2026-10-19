@@ -4,13 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "dev": "tsx src/server.ts",
-  "start": "node dist/server.js",
-  "build": "tsc",
-  "lint": "eslint eslint-rules",
-  "test": "vitest run",
-  "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov"
-},
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc",
+    "lint": "eslint eslint-rules",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -34,6 +34,10 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.14.5",
     "@grpc/proto-loader": "^0.8.1",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.81.2",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/sdk-node": "^0.223.0",
     "amqplib": "^2.2.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

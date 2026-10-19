@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+import "./instrumentation";
+
 import { Server, ServerCredentials, status } from "@grpc/grpc-js";
 
 import {
