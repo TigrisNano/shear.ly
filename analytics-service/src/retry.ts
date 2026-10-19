@@ -6,34 +6,32 @@ export interface RetryOptions {
   maxDelayMs?: number;
 }
 
-export async function retry<T>(
+export function retry<T>(
   operation: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<T> {
-  const { maxAttempts = 3, baseDelayMs = 200, maxDelayMs = 2000 } = options;
+  const maxAttempts = options.maxAttempts ?? 3;
+  const baseDelayMs = options.baseDelayMs ?? 200;
+  const maxDelayMs = options.maxDelayMs ?? 2000;
 
-  async function runAttempt(attempt: number): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (attempt >= maxAttempts) {
-        throw error;
-      }
+  const attempt = (number: number): Promise<T> =>
+    Promise.resolve()
+      .then(operation)
+      .catch((error: unknown) => {
+        if (number >= maxAttempts) {
+          throw error;
+        }
 
-      const exponentialDelay = Math.min(
-        maxDelayMs,
-        baseDelayMs * 2 ** (attempt - 1),
-      );
+        const ceiling = Math.min(
+          maxDelayMs,
+          baseDelayMs * 2 ** (number - 1),
+        );
+        const waitMs = randomInt(Math.max(1, Math.floor(ceiling)));
 
-      const delay = randomInt(Math.max(1, Math.floor(exponentialDelay)));
-
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delay);
+        return new Promise<void>((resolve) => {
+          setTimeout(resolve, waitMs);
+        }).then(() => attempt(number + 1));
       });
 
-      return runAttempt(attempt + 1);
-    }
-  }
-
-  return runAttempt(1);
+  return attempt(1);
 }
