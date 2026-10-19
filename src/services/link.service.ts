@@ -89,11 +89,7 @@ export async function getLinkByShortCode(
         level: "error",
         service: "shearly-api",
         event: "click_event_publish_failed",
-        correlationId,
-        shortCode,
-        error: sanitizeLogValue(
-          error instanceof Error ? error.message : String(error),
-        ),
+        error: "RabbitMQ publish failed",
         timestamp: new Date().toISOString(),
       }),
     );
