@@ -14,6 +14,13 @@ import {
   saveIdempotencyKey,
 } from "../repositories/idempotency.repository";
 
+function sanitizeLogValue(value: unknown): string {
+  return String(value)
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/[^\x20-\x7E]/g, "?")
+    .slice(0, 500);
+}
+
 function generateShortCode(): string {
   return randomBytes(4).toString("hex");
 }
@@ -84,7 +91,9 @@ export async function getLinkByShortCode(
         event: "click_event_publish_failed",
         correlationId,
         shortCode,
-        error: error instanceof Error ? error.message : String(error),
+        error: sanitizeLogValue(
+          error instanceof Error ? error.message : String(error),
+        ),
         timestamp: new Date().toISOString(),
       }),
     );

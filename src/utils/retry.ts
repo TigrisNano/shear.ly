@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 
 export interface RetryOptions {
   maxAttempts?: number;
@@ -9,35 +10,30 @@ export async function retry<T>(
   operation: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<T> {
-  const {
-    maxAttempts = 3,
-    baseDelayMs = 100,
-    maxDelayMs = 2000,
-  } = options;
+  const { maxAttempts = 3, baseDelayMs = 100, maxDelayMs = 2000 } = options;
 
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  async function runAttempt(attempt: number): Promise<T> {
     try {
       return await operation();
     } catch (error) {
-      lastError = error;
-
-      if (attempt === maxAttempts - 1) {
-        break;
+      if (attempt >= maxAttempts) {
+        throw error;
       }
 
       const exponentialDelay = Math.min(
         maxDelayMs,
-        baseDelayMs * 2 ** attempt,
+        baseDelayMs * 2 ** (attempt - 1),
       );
 
-      const jitter = Math.random() * exponentialDelay;
-      await new Promise((resolve) =>
-        setTimeout(resolve, jitter),
-      );
+      const delay = randomInt(Math.max(1, Math.floor(exponentialDelay)));
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay);
+      });
+
+      return runAttempt(attempt + 1);
     }
   }
 
-  throw lastError;
+  return runAttempt(1);
 }
