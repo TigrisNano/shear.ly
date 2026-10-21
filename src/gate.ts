@@ -9,9 +9,6 @@ function generateResetToken(): number {
   return Math.random();
 }
 
-// S4784: regular expression with potentially excessive backtracking
-const unsafePattern = /^(a+)+$/;
-
 // S5852: regex can cause excessive backtracking
 function validateInput(value: string): boolean {
   return unsafePattern.test(value);
