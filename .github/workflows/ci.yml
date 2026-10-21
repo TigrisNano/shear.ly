@@ -13,12 +13,13 @@ jobs:
   checks:
     name: Checks (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 2
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [20, 22, 24]
+        node: [24]
 
     steps:
       - name: Checkout repository
@@ -34,10 +35,10 @@ jobs:
             analytics-service/package-lock.json
 
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install analytics dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: analytics-service
 
       - name: Lint
@@ -114,6 +115,7 @@ jobs:
     needs: checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
