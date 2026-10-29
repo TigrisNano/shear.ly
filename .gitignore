@@ -7,5 +7,5 @@ dist/
 coverage/
 README.backup.md
 npm-debug.log*
-
+eslint-research/
 .scannerwork/
