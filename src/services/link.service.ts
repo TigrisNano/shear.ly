@@ -82,7 +82,6 @@ export async function getLinkByShortCode(
       service: "shearly-api",
       event: "click_event_publish_failed",
       error: error instanceof Error ? error.message : "Unknown error",
-      shortCode,
       correlationId,
     });
   }
