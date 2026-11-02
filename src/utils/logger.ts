@@ -9,7 +9,7 @@ interface LogEntry {
 
 function sanitizeLogValue(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(/[\r\n]/g, " ");
+    return value.replace(/[\r\n\u2028\u2029]/g, " ");
   }
 
   if (Array.isArray(value)) {
@@ -17,29 +17,38 @@ function sanitizeLogValue(value: unknown): unknown {
   }
 
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key.replace(/[\r\n]/g, " "),
-        sanitizeLogValue(item),
-      ]),
-    );
+    const sanitized: Record<string, unknown> = {};
+
+    for (const [key, item] of Object.entries(value)) {
+      sanitized[sanitizeLogValue(key) as string] = sanitizeLogValue(item);
+    }
+
+    return sanitized;
   }
 
   return value;
 }
 
 function writeLog(entry: LogEntry): void {
-  const output =
-    entry.level === "error"
-      ? console.error
-      : entry.level === "warn"
-        ? console.warn
-        : console.log;
+  let output: typeof console.log;
+
+  switch (entry.level) {
+    case "error":
+      output = console.error;
+      break;
+    case "warn":
+      output = console.warn;
+      break;
+    default:
+      output = console.log;
+  }
+
+  const sanitizedEntry = sanitizeLogValue(entry);
 
   output(
     JSON.stringify({
       timestamp: new Date().toISOString(),
-      ...(sanitizeLogValue(entry) as LogEntry),
+      ...(sanitizedEntry as LogEntry),
     }),
   );
 }
