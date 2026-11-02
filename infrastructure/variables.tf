@@ -25,6 +25,7 @@ variable "availability_zones" {
 variable "traffic_weight" {
   description = "Traffic weight for this environment"
   type        = number
+  default     = 100
 
   validation {
     condition     = var.traffic_weight >= 0 && var.traffic_weight <= 255

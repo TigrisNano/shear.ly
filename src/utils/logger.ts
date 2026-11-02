@@ -7,6 +7,27 @@ interface LogEntry {
   [key: string]: unknown;
 }
 
+function sanitizeLogValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/[\r\n]/g, " ");
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitizeLogValue);
+  }
+
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key.replace(/[\r\n]/g, " "),
+        sanitizeLogValue(item),
+      ]),
+    );
+  }
+
+  return value;
+}
+
 function writeLog(entry: LogEntry): void {
   const output =
     entry.level === "error"
@@ -18,7 +39,7 @@ function writeLog(entry: LogEntry): void {
   output(
     JSON.stringify({
       timestamp: new Date().toISOString(),
-      ...entry,
+      ...(sanitizeLogValue(entry) as LogEntry),
     }),
   );
 }
