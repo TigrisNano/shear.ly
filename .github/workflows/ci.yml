@@ -10,6 +10,43 @@ permissions:
   contents: read
 
 jobs:
+  dependency-scan:
+    name: Snyk Dependency Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Install Snyk CLI
+        run: npm install --global snyk@1.1308.3 --ignore-scripts
+
+      - name: Check Snyk token availability
+        shell: bash
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "SNYK_TOKEN is missing"
+            exit 1
+          fi
+          echo "SNYK_TOKEN is available"
+
+      - name: Scan dependencies
+        run: snyk test --all-projects --severity-threshold=high --sarif-file-output=snyk.sarif
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Upload Snyk results to GitHub Security
+        if: always() && hashFiles('snyk.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
+
   checks:
     name: Checks (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
