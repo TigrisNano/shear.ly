@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Install Snyk CLI
-        run: npm install --global snyk
+        run: npm install --global snyk@1.1308.3 --ignore-scripts
 
       - name: Check Snyk token availability
         shell: bash
