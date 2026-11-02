@@ -1,0 +1,11 @@
+﻿apiVersion: 1
+
+providers:
+  - name: Shearly Dashboards
+    orgId: 1
+    folder: Shear.ly
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

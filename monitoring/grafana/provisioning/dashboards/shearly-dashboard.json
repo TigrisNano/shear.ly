@@ -1,0 +1,235 @@
+{
+    "uid":  "shearly-dora",
+    "title":  "Shear.ly - DORA \u0026 API Monitoring",
+    "tags":  [
+                 "shearly",
+                 "dora",
+                 "monitoring"
+             ],
+    "timezone":  "browser",
+    "schemaVersion":  39,
+    "version":  1,
+    "refresh":  "15s",
+    "time":  {
+                 "from":  "now-7d",
+                 "to":  "now"
+             },
+    "panels":  [
+                   {
+                       "id":  1,
+                       "title":  "Deployment Frequency (7d)",
+                       "type":  "stat",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(increase(dora_deployments_total{status=\"success\"}[7d]))",
+                                           "legendFormat":  "Successful deployments",
+                                           "refId":  "A",
+                                           "instant":  true,
+                                           "range":  false
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  2,
+                       "title":  "Lead Time for Changes",
+                       "type":  "stat",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  6,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        }
+                                       },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(increase(dora_lead_time_seconds_sum[7d])) / sum(increase(dora_lead_time_seconds_count[7d]))",
+                                           "legendFormat":  "Average lead time",
+                                           "refId":  "A",
+                                           "instant":  true,
+                                           "range":  false
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  3,
+                       "title":  "Change Failure Rate",
+                       "type":  "gauge",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  12,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "percent",
+                                                            "min":  0,
+                                                            "max":  100
+                                                        }
+                                       },
+                       "targets":  [
+                                       {
+                                           "expr":  "100 * sum(increase(dora_failed_deployments_total[7d])) / clamp_min(sum(increase(dora_completed_deployments_total[7d])), 1)",
+                                           "legendFormat":  "Failure rate",
+                                           "refId":  "A",
+                                           "instant":  true,
+                                           "range":  false
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  4,
+                       "title":  "Time to Restore Service",
+                       "type":  "stat",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  18,
+                                       "y":  0
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        }
+                                       },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(increase(dora_restore_time_seconds_sum[7d])) / sum(increase(dora_restore_time_seconds_count[7d]))",
+                                           "legendFormat":  "Average restore time",
+                                           "refId":  "A",
+                                           "instant":  true,
+                                           "range":  false
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  5,
+                       "title":  "HTTP Requests per Second",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "sum(rate(http_requests_total[5m])) by (method, status_code)",
+                                           "legendFormat":  "{{method}} {{status_code}}",
+                                           "refId":  "A",
+                                           "instant":  false,
+                                           "range":  true
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  6,
+                       "title":  "API Response Time (P95)",
+                       "type":  "timeseries",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  5
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        }
+                                       },
+                       "targets":  [
+                                       {
+                                           "expr":  "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                                           "legendFormat":  "P95",
+                                           "refId":  "A",
+                                           "instant":  false,
+                                           "range":  true
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  7,
+                       "title":  "Active HTTP Requests",
+                       "type":  "gauge",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "PBFA97CFB590B2093"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  12,
+                                       "x":  0,
+                                       "y":  13
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "min":  0
+                                                        }
+                                       },
+                       "targets":  [
+                                       {
+                                           "expr":  "http_active_requests",
+                                           "legendFormat":  "Active requests",
+                                           "refId":  "A",
+                                           "instant":  true,
+                                           "range":  false
+                                       }
+                                   ]
+                   },
+                   {
+                       "id":  8,
+                       "title":  "Shear.ly API Logs",
+                       "type":  "logs",
+                       "datasource":  {
+                                          "type":  "loki",
+                                          "uid":  "P8E80F9AEF21F6940"
+                                      },
+                       "gridPos":  {
+                                       "h":  10,
+                                       "w":  12,
+                                       "x":  12,
+                                       "y":  13
+                                   },
+                       "targets":  [
+                                       {
+                                           "expr":  "{container=\"shearly-api-1\"} | json",
+                                           "refId":  "A"
+                                       }
+                                   ]
+                   }
+               ]
+}

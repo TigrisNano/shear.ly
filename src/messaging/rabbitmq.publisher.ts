@@ -2,6 +2,7 @@ import amqp, { Channel, ChannelModel } from "amqplib";
 import { env } from "../config/env";
 import { retry } from "../utils/retry";
 import { CircuitBreaker } from "../utils/circuit-breaker";
+import { logger } from "../utils/logger";
 
 const EXCHANGE_NAME = "shearly.events";
 const ROUTING_KEY = "click.registered";
@@ -77,6 +78,10 @@ export async function publishClickRegistered(
       throw new Error("RabbitMQ write buffer is full");
     }
 
-    console.log("Published ClickRegistered:", JSON.stringify(event));
+    logger.info("RabbitMQ", "ClickRegistered event published", {
+      service: "shearly-api",
+      event: "click_registered",
+      ...event,
+    });
   });
 }

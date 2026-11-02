@@ -9,17 +9,11 @@ import {
   deleteLink,
 } from "../repositories/link.repository";
 import { CreateLinkInput } from "../types/link.types";
+import { logger } from "../utils/logger";
 import {
   findIdempotencyKey,
   saveIdempotencyKey,
 } from "../repositories/idempotency.repository";
-
-function sanitizeLogValue(value: unknown): string {
-  return String(value)
-    .replace(/[\r\n\t]/g, " ")
-    .replace(/[^\x20-\x7E]/g, "?")
-    .slice(0, 500);
-}
 
 function generateShortCode(): string {
   return randomBytes(4).toString("hex");
@@ -84,15 +78,13 @@ export async function getLinkByShortCode(
   try {
     await publishClickRegistered(shortCode, correlationId);
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        level: "error",
-        service: "shearly-api",
-        event: "click_event_publish_failed",
-        error: "RabbitMQ publish failed",
-        timestamp: new Date().toISOString(),
-      }),
-    );
+    logger.error("LinkService", "Failed to publish click event", {
+      service: "shearly-api",
+      event: "click_event_publish_failed",
+      error: error instanceof Error ? error.message : "Unknown error",
+      shortCode,
+      correlationId,
+    });
   }
 
   return link;
