@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Request, Response, NextFunction } from "express";
+import { logger } from "../utils/logger";
 
 function sanitizeLogValue(value: unknown): string {
   return String(value)
@@ -26,31 +27,23 @@ export function correlationIdMiddleware(
   const method = sanitizeLogValue(req.method);
   const path = sanitizeLogValue(req.path);
 
-  console.log(
-    JSON.stringify({
-      level: "info",
+  logger.info("CorrelationId", "HTTP request started", {
+    service: "shearly-api",
+    event: "http_request_started",
+    correlationId,
+    method,
+    path,
+  });
+
+  res.on("finish", () => {
+    logger.info("CorrelationId", "HTTP request completed", {
       service: "shearly-api",
-      event: "http_request_started",
+      event: "http_request_completed",
       correlationId,
       method,
       path,
-      timestamp: new Date().toISOString(),
-    }),
-  );
-
-  res.on("finish", () => {
-    console.log(
-      JSON.stringify({
-        level: "info",
-        service: "shearly-api",
-        event: "http_request_completed",
-        correlationId,
-        method,
-        path,
-        statusCode: res.statusCode,
-        timestamp: new Date().toISOString(),
-      }),
-    );
+      statusCode: res.statusCode,
+    });
   });
 
   next();

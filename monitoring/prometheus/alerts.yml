@@ -1,0 +1,38 @@
+﻿groups:
+  - name: shearly-api-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP error rate"
+          description: "More than 5% of API requests return HTTP 5xx errors."
+
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "The P95 API response time exceeds 1 second."
+
+      - alert: ServiceUnavailable
+        expr: up{job="shearly-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Shear.ly API is unavailable"
+          description: "Prometheus cannot scrape the Shear.ly API."
