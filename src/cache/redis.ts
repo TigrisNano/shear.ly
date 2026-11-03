@@ -21,15 +21,13 @@ client.on("end", () => {
 async function ensureConnected(): Promise<void> {
   if (client.isReady) return;
 
-  if (!connectionPromise) {
-    connectionPromise = client
-      .connect()
-      .then(() => undefined)
-      .catch((error: Error) => {
-        connectionPromise = undefined;
-        throw error;
-      });
-  }
+  connectionPromise ??= client
+    .connect()
+    .then(() => undefined)
+    .catch((error: Error) => {
+      connectionPromise = undefined;
+      throw error;
+    });
 
   await connectionPromise;
 }

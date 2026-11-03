@@ -1,4 +1,3 @@
-
 import http from "k6/http";
 import { check, sleep } from "k6";
 
@@ -10,9 +9,7 @@ export const options = {
     load_test: {
       executor: "ramping-vus",
       startVUs: 10,
-      stages: [
-        { duration: "5m", target: 100 },
-      ],
+      stages: [{ duration: "5m", target: 100 }],
       gracefulRampDown: "30s",
     },
   },
@@ -23,7 +20,7 @@ export const options = {
   },
 };
 
-export default function () {
+export default function loadTest() {
   const response = http.get(`${BASE_URL}${ENDPOINT}`, {
     redirects: 0,
   });
@@ -38,8 +35,7 @@ export default function () {
   } else if (ENDPOINT === "/links") {
     checks = {
       "links status is 200": (r) => r.status === 200,
-      "links response is an array": (r) =>
-        Array.isArray(r.json()),
+      "links response is an array": (r) => Array.isArray(r.json()),
     };
   } else if (ENDPOINT.startsWith("/links/r/")) {
     checks = {
