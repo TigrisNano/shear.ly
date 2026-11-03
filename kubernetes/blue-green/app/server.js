@@ -1,4 +1,4 @@
-﻿const http = require("http");
+const http = require("node:http");
 
 const version = process.env.APP_VERSION || "unknown";
 

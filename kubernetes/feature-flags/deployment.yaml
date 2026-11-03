@@ -12,6 +12,7 @@ spec:
       labels:
         app: shearly-feature-flags
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: app
           image: shearly-feature-flags:1.0
@@ -22,20 +23,14 @@ spec:
             - name: config
               mountPath: /app/config
               readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"
       volumes:
         - name: config
           configMap:
             name: shearly-feature-flags
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: shearly-feature-flags
-spec:
-  type: NodePort
-  selector:
-    app: shearly-feature-flags
-  ports:
-    - port: 3000
-      targetPort: 3000
-      nodePort: 30085

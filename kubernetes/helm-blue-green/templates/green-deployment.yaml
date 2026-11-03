@@ -17,12 +17,17 @@ spec:
         app: {{ .Release.Name }}
         environment: green
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: app
-          image: "{{ .Values.image.repository }}:{{ .Values.green.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.green.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 3000
-          env:
-            - name: APP_VERSION
-              value: green
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"

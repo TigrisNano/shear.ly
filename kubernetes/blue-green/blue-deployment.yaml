@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: shearly-blue
@@ -17,9 +17,17 @@ spec:
         app: shearly
         environment: blue
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: app
           image: shearly-demo:blue
           imagePullPolicy: Never
           ports:
             - containerPort: 3000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"
