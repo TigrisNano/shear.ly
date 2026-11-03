@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-green
+  labels:
+    app: {{ .Release.Name }}
+    environment: green
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+      environment: green
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+        environment: green
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.green.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"

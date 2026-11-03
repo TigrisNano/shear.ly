@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shearly-canary
+  labels:
+    app: shearly-canary
+    version: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shearly-canary
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: shearly-canary
+        version: canary
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: app
+          image: shearly-demo:green
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"

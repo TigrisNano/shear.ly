@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shearly-feature-flags
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shearly-feature-flags
+  template:
+    metadata:
+      labels:
+        app: shearly-feature-flags
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: app
+          image: shearly-feature-flags:1.0
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+              ephemeral-storage: "64Mi"
+            limits:
+              memory: "128Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: shearly-feature-flags
