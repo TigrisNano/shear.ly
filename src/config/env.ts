@@ -34,5 +34,9 @@ export const env = {
     password: process.env.RABBITMQ_PASSWORD || "your_password",
   },
 
+  redis: {
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+  },
+
   port: Number(getEnv("PORT")),
 };

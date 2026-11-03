@@ -14,6 +14,9 @@ import {
   findIdempotencyKey,
   saveIdempotencyKey,
 } from "../repositories/idempotency.repository";
+import { getCache, setCache, deleteCache } from "../cache/redis";
+
+const CACHE_TTL_SECONDS = 60;
 
 function generateShortCode(): string {
   return randomBytes(4).toString("hex");
@@ -30,14 +33,17 @@ export async function createShortLink(
   if (!idempotencyKey) {
     const shortCode = generateShortCode();
 
-    return createLink({
+    const link = await createLink({
       originalUrl: input.originalUrl,
       shortCode,
     });
+
+    await deleteCache("links:all");
+
+    return link;
   }
 
   const requestHash = createRequestHash(input);
-
   const existingKey = await findIdempotencyKey(idempotencyKey);
 
   if (existingKey) {
@@ -63,6 +69,7 @@ export async function createShortLink(
   });
 
   await saveIdempotencyKey(idempotencyKey, requestHash, 201, link);
+  await deleteCache("links:all");
 
   return link;
 }
@@ -90,17 +97,49 @@ export async function getLinkByShortCode(
 }
 
 export async function getLinkById(id: number) {
-  return findLinkById(id);
+  const cacheKey = `links:id:${id}`;
+  const cachedLink = await getCache(cacheKey);
+
+  if (cachedLink !== undefined) {
+    return cachedLink;
+  }
+
+  const link = await findLinkById(id);
+
+  if (link) {
+    await setCache(cacheKey, link, CACHE_TTL_SECONDS);
+  }
+
+  return link;
 }
 
 export async function getAllLinks() {
-  return findAllLinks();
+  const cacheKey = "links:all";
+  const cachedLinks = await getCache(cacheKey);
+
+  if (cachedLinks !== undefined) {
+    return cachedLinks;
+  }
+
+  const links = await findAllLinks();
+
+  await setCache(cacheKey, links, CACHE_TTL_SECONDS);
+
+  return links;
 }
 
 export async function updateShortLink(id: number, originalUrl: string) {
-  return updateLink(id, originalUrl);
+  const link = await updateLink(id, originalUrl);
+
+  await deleteCache("links:all", `links:id:${id}`);
+
+  return link;
 }
 
 export async function removeLink(id: number) {
-  return deleteLink(id);
+  const link = await deleteLink(id);
+
+  await deleteCache("links:all", `links:id:${id}`);
+
+  return link;
 }
