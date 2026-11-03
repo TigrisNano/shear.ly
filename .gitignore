@@ -27,3 +27,6 @@ monitoring/**/*.tmp
 *.backup.json
 
 infrastructure/active-state.json
+
+# Performance test results
+performance/results/

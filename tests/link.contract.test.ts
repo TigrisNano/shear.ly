@@ -7,6 +7,12 @@ vi.mock("../src/db/database", () => ({
   replicaPool: { query: vi.fn() },
 }));
 
+vi.mock("../src/cache/redis", () => ({
+  getCache: vi.fn().mockResolvedValue(undefined),
+  setCache: vi.fn().mockResolvedValue(undefined),
+  deleteCache: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../src/repositories/link.repository", () => ({
   createLink: vi.fn(),
   findLinkByShortCode: vi.fn(),
