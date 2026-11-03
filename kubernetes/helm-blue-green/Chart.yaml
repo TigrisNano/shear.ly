@@ -1,0 +1,6 @@
+apiVersion: v2
+name: shearly-blue-green
+description: Helm chart for Blue-Green deployment of Shear.ly
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,25 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shearly-stable
+  labels:
+    app: shearly-canary
+    version: stable
+spec:
+  replicas: 9
+  selector:
+    matchLabels:
+      app: shearly-canary
+      version: stable
+  template:
+    metadata:
+      labels:
+        app: shearly-canary
+        version: stable
+    spec:
+      containers:
+        - name: app
+          image: shearly-demo:blue
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
